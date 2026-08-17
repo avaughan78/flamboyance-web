@@ -25,6 +25,16 @@ export function animalName(animals: DBAnimal[], nouns: DBCollectiveNoun[], nounI
   return animals.find((a) => a.id === noun.animal_id)?.name ?? ''
 }
 
+export function pluralAnimalName(animals: DBAnimal[], nouns: DBCollectiveNoun[], nounId: string): string {
+  const noun = nouns.find((n) => n.id === nounId)
+  if (!noun) return ''
+  return animals.find((a) => a.id === noun.animal_id)?.plural_name ?? ''
+}
+
+export function nounText(nouns: DBCollectiveNoun[], nounId: string): string {
+  return nouns.find((n) => n.id === nounId)?.noun ?? ''
+}
+
 export function etymology(nouns: DBCollectiveNoun[], nounId: string): string | null {
   return nouns.find((n) => n.id === nounId)?.etymology ?? null
 }
@@ -37,31 +47,44 @@ export async function unlockCard(nounId: string): Promise<void> {
 }
 
 /**
- * Returns the correct noun and a shuffled set of 4 options. Distractors are
- * deduped by lowercased *text*, not just animal id — many unrelated animals
- * legitimately share a noun (e.g. "Herd"), so animal-only dedup let the same
- * word appear twice as separate options. Mirrors GameService.choices(for:)
- * in the iOS app exactly, so web and native players see equally-fair rounds.
+ * The noun is given ("a crash of ______"); the player guesses the animal.
+ * Returns the correct animal's plural name plus a shuffled set of 4 options
+ * (3 distractor animals). Distractors exclude any animal that also
+ * legitimately takes this exact noun (many animals share a noun — e.g.
+ * dozens take "Herd" — so a "wrong" option must actually be wrong, not just
+ * a different animal that happens to be equally correct). Mirrors
+ * GameService.choices(for:) in the iOS app exactly, so web and native
+ * players see equally-fair rounds.
  */
-export function choices(nouns: DBCollectiveNoun[], nounId: string): { correct: string; options: string[] } {
+export function choices(
+  animals: DBAnimal[],
+  nouns: DBCollectiveNoun[],
+  nounId: string
+): { correct: string; options: string[] } {
   const noun = nouns.find((n) => n.id === nounId)
   if (!noun) return { correct: '', options: [] }
+  const correctAnimal = animals.find((a) => a.id === noun.animal_id)
+  if (!correctAnimal) return { correct: '', options: [] }
 
-  const seenTexts = new Set([noun.noun.toLowerCase()])
+  const animalIdsSharingThisNoun = new Set(
+    nouns.filter((n) => n.noun.toLowerCase() === noun.noun.toLowerCase()).map((n) => n.animal_id)
+  )
+
+  const seenNames = new Set([correctAnimal.plural_name.toLowerCase()])
   const distractors: string[] = []
-  const candidates = nouns.filter((n) => n.animal_id !== noun.animal_id)
+  const candidates = animals.filter((a) => !animalIdsSharingThisNoun.has(a.id))
   shuffleInPlace(candidates)
   for (const candidate of candidates) {
-    const key = candidate.noun.toLowerCase()
-    if (seenTexts.has(key)) continue
-    seenTexts.add(key)
-    distractors.push(candidate.noun)
+    const key = candidate.plural_name.toLowerCase()
+    if (seenNames.has(key)) continue
+    seenNames.add(key)
+    distractors.push(candidate.plural_name)
     if (distractors.length === 3) break
   }
 
-  const options = [...distractors, noun.noun]
+  const options = [...distractors, correctAnimal.plural_name]
   shuffleInPlace(options)
-  return { correct: noun.noun, options }
+  return { correct: correctAnimal.plural_name, options }
 }
 
 function shuffleInPlace<T>(arr: T[]): void {
@@ -134,10 +157,10 @@ export async function fetchExistingAnswer(
 export async function submitAnswer(
   roomId: string,
   questionIndex: number,
-  submittedNoun: string
+  submittedAnimal: string
 ): Promise<SubmitAnswerResponse> {
   const { data, error } = await supabase.functions.invoke('submit-answer', {
-    body: { room_id: roomId, question_index: questionIndex, submitted_noun: submittedNoun },
+    body: { room_id: roomId, question_index: questionIndex, submitted_animal: submittedAnimal },
   })
   if (error) throw error
   return data as SubmitAnswerResponse

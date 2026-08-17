@@ -2,6 +2,7 @@ export interface DBAnimal {
   id: string
   name: string
   category: string
+  plural_name: string
 }
 
 export interface DBCollectiveNoun {

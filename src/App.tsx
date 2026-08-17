@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DBAnimal, DBCollectiveNoun, DBRoom, DBRoomPlayer, SubmitAnswerResponse } from './types'
 import {
-  animalName as lookupAnimalName,
   choices,
   ensureSignedIn,
   etymology as lookupEtymology,
   fetchExistingAnswer,
   joinRoom,
   loadContent,
+  nounText as lookupNounText,
   observePlayers,
   observeRoom,
   submitAnswer,
   unlockCard,
 } from './game'
-import { AnimalIllustration } from './components/AnimalIllustration'
 import { AnswerRow, answerRowState } from './components/AnswerRow'
 import { PillButton } from './components/PillButton'
 
@@ -31,7 +30,8 @@ export default function App() {
   const [result, setResult] = useState<SubmitAnswerResponse | null>(null)
   const [viewingResults, setViewingResults] = useState(false)
   const [options, setOptions] = useState<string[]>([])
-  const [correctText, setCorrectText] = useState('')
+  const [correctAnimal, setCorrectAnimal] = useState('')
+  const [nounText, setNounText] = useState('')
 
   const roomRef = useRef<DBRoom | null>(null)
   roomRef.current = room
@@ -55,9 +55,10 @@ export default function App() {
     if (!nounId) return
 
     setViewingResults(false)
-    const picked = choices(content.nouns, nounId)
-    setCorrectText(picked.correct)
+    const picked = choices(content.animals, content.nouns, nounId)
+    setCorrectAnimal(picked.correct)
     setOptions(picked.options)
+    setNounText(lookupNounText(content.nouns, nounId))
     setSelected(null)
     setResult(null)
 
@@ -100,12 +101,6 @@ export default function App() {
     }
   }
 
-  const animalNameForCurrentQuestion = useMemo(() => {
-    if (!room || !content) return ''
-    const nounId = room.question_ids[room.current_question_index]
-    return nounId ? lookupAnimalName(content.animals, content.nouns, nounId) : ''
-  }, [room, content])
-
   const etymologyForCurrentQuestion = useMemo(() => {
     if (!room || !content) return null
     const nounId = room.question_ids[room.current_question_index]
@@ -140,8 +135,8 @@ export default function App() {
       <RevealScreen
         isCorrect={result.is_correct}
         pointsAwarded={result.points_awarded}
-        animalName={animalNameForCurrentQuestion}
-        correctNoun={correctText}
+        animalPlural={correctAnimal}
+        correctNoun={nounText}
         etymology={etymologyForCurrentQuestion}
         onNext={() => setViewingResults(true)}
       />
@@ -152,7 +147,7 @@ export default function App() {
     <QuestionScreen
       questionIndex={room.current_question_index}
       totalQuestions={room.question_ids.length}
-      animalName={animalNameForCurrentQuestion}
+      noun={nounText}
       options={options}
       selected={selected}
       onSelect={handleAnswer}
@@ -318,14 +313,14 @@ function Avatar({ initial, emphasized = false }: { initial: string; emphasized?:
 function QuestionScreen({
   questionIndex,
   totalQuestions,
-  animalName,
+  noun,
   options,
   selected,
   onSelect,
 }: {
   questionIndex: number
   totalQuestions: number
-  animalName: string
+  noun: string
   options: string[]
   selected: string | null
   onSelect: (option: string) => void
@@ -349,24 +344,29 @@ function QuestionScreen({
         </div>
       </div>
 
-      <div style={{ textAlign: 'center' }}>
+      <div>
         <p className="fb-pair-top" style={{ fontSize: 32 }}>
-          a
+          {noun}
         </p>
         <p className="fb-pair-bottom" style={{ fontSize: 32 }}>
-          {animalName.toLowerCase()}
+          of ______
         </p>
       </div>
 
-      <div style={{ flex: 1, minHeight: 160 }}>
-        <AnimalIllustration animalName={animalName} />
-      </div>
-
+      {/* The animal is the secret to be guessed here — no illustration,
+          name, or placeholder can appear until RevealScreen, matching the
+          design reference exactly (no image slot appears on any question
+          screen there). */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {options.map((option) => (
           <AnswerRow key={option} text={option} state={answerRowState(option, selected)} onClick={() => onSelect(option)} />
         ))}
       </div>
+
+      {/* Real flexible space lives here, below the options, not between the
+          blank and the options — matching the design, where the options
+          sit close under the blank and the empty space collects beneath. */}
+      <div style={{ flex: 1 }} />
     </Shell>
   )
 }
@@ -374,14 +374,14 @@ function QuestionScreen({
 function RevealScreen({
   isCorrect,
   pointsAwarded,
-  animalName,
+  animalPlural,
   correctNoun,
   etymology,
   onNext,
 }: {
   isCorrect: boolean
   pointsAwarded: number
-  animalName: string
+  animalPlural: string
   correctNoun: string
   etymology: string | null
   onNext: () => void
@@ -398,9 +398,9 @@ function RevealScreen({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: isCorrect ? 'var(--fb-tint-bg)' : 'transparent',
-            border: `1.5px solid ${isCorrect ? 'var(--fb-tint-border)' : 'var(--fb-border-strong)'}`,
-            color: isCorrect ? 'var(--fb-accent-text)' : 'var(--fb-text-4)',
+            background: isCorrect ? 'var(--fb-tint-success-bg)' : 'transparent',
+            border: `1.5px solid ${isCorrect ? 'var(--fb-tint-success-border)' : 'var(--fb-border-strong)'}`,
+            color: isCorrect ? 'var(--fb-success-text)' : 'var(--fb-text-4)',
             fontSize: 16,
           }}
         >
@@ -414,12 +414,15 @@ function RevealScreen({
         </div>
       </div>
 
-      <div className="fb-tint-card">
+      <div className={isCorrect ? 'fb-tint-card success' : 'fb-tint-card'}>
+        <p className="fb-kicker" style={{ marginBottom: 10, color: isCorrect ? 'var(--fb-success-text)' : undefined }}>
+          THE WORD
+        </p>
         <p className="fb-pair-top on-tint" style={{ fontSize: 40 }}>
           {correctNoun}
         </p>
         <p className="fb-pair-bottom on-tint" style={{ fontSize: 40 }}>
-          of {animalName.toLowerCase()}s
+          of {animalPlural.toLowerCase()}
         </p>
       </div>
 
