@@ -9,6 +9,7 @@ export interface DBCollectiveNoun {
   animal_id: string
   noun: string
   rarity: string
+  etymology: string | null
 }
 
 export interface DBRoom {

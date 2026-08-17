@@ -1,41 +1,133 @@
 @font-face {
-  font-family: 'Baloo 2';
-  font-weight: 700;
-  src: url('/flamboyance-web/fonts/Baloo2-Bold.ttf') format('truetype');
+  font-family: 'Inter';
+  font-weight: 300;
+  src: url('/flamboyance-web/fonts/Inter-Light.ttf') format('truetype');
 }
 @font-face {
-  font-family: 'Poppins';
+  font-family: 'Inter';
   font-weight: 400;
-  src: url('/flamboyance-web/fonts/Poppins-Regular.ttf') format('truetype');
+  src: url('/flamboyance-web/fonts/Inter-Regular.ttf') format('truetype');
 }
 @font-face {
-  font-family: 'Poppins';
+  font-family: 'Inter';
+  font-weight: 500;
+  src: url('/flamboyance-web/fonts/Inter-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
   font-weight: 600;
-  src: url('/flamboyance-web/fonts/Poppins-SemiBold.ttf') format('truetype');
+  src: url('/flamboyance-web/fonts/Inter-SemiBold.ttf') format('truetype');
 }
 
+/* "Collective" tokens — a neutral ground (black in dark, white in light)
+   with a single rose accent that only appears in selection, progress, and
+   the one tinted "payoff" card per screen. Never a flat accent fill. */
 :root {
-  --fb-paper: #120810;
-  --fb-paper-raised: #200d14;
-  --fb-ink: #ffe9ec;
-  --fb-ink-soft: #d9a9b4;
-  --fb-coral: #ff6b93;
-  --fb-coral-deep: #d6234f;
-  --fb-coral-soft: #341721;
-  --fb-teal: #7ee8b8;
-  --fb-teal-soft: #173d34;
-  --fb-gold: #f0c572;
-  --fb-gold-soft: #3a2e17;
-  --fb-violet: #c792ea;
-  --fb-violet-soft: #2e1f3a;
-  --fb-correct: #4ade80;
-  --fb-correct-soft: #123321;
-  --fb-incorrect: #ff5c5c;
-  --fb-incorrect-soft: #3a1414;
-  --fb-hairline: rgba(255, 255, 255, 0.14);
-  --fb-hairline-strong: rgba(255, 255, 255, 0.24);
-  --fb-gradient-primary: linear-gradient(90deg, var(--fb-coral), var(--fb-coral-deep));
-  --fb-illustration-bg: radial-gradient(circle at 30% 30%, #6b2038, var(--fb-paper-raised) 70%);
+  --fb-bg: #000000;
+  --fb-surface: #101012;
+  --fb-border: #26262a;
+  --fb-border-strong: #2f2f34;
+  --fb-rule: #1c1c20;
+
+  --fb-accent: #ff4d6d;
+  --fb-accent-text: #ffb3c1;
+  --fb-accent-mid: #ff8fa3;
+  --fb-accent-bright: #ffe0e6;
+  --fb-accent-faint: #c98a99;
+
+  --fb-text: #f2f2f3;
+  --fb-text-2: #c9c9cf;
+  --fb-text-3: #9a9aa1;
+  --fb-text-4: #78787f;
+  --fb-text-faint: #5c5c63;
+  --fb-icon-off: #3d3d43;
+
+  --fb-tint-bg: rgba(255, 77, 109, 0.1);
+  --fb-tint-border: rgba(255, 77, 109, 0.34);
+  --fb-tint-row-bg: rgba(255, 77, 109, 0.12);
+  --fb-tint-row-border: rgba(255, 77, 109, 0.4);
+  --fb-tint-button-bg: rgba(255, 77, 109, 0.12);
+  --fb-tint-button-border: var(--fb-accent);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --fb-bg: #ffffff;
+    --fb-surface: #faf8f9;
+    --fb-border: #ebe6e8;
+    --fb-border-strong: #ddd6d9;
+    --fb-rule: #f0ecee;
+
+    --fb-accent: #d81e46;
+    --fb-accent-text: #a3163a;
+    --fb-accent-mid: #a3163a;
+    --fb-accent-bright: #a3163a;
+    --fb-accent-faint: #8b5f6b;
+
+    --fb-text: #171516;
+    --fb-text-2: #463f42;
+    --fb-text-3: #6f6469;
+    --fb-text-4: #6f6469;
+    --fb-text-faint: #c0b6ba;
+    --fb-icon-off: #cfc7cb;
+
+    --fb-tint-bg: #fff1f4;
+    --fb-tint-border: #f3c9d4;
+    --fb-tint-row-bg: #fff1f4;
+    --fb-tint-row-border: #eda8ba;
+    --fb-tint-button-bg: #fff1f4;
+    --fb-tint-button-border: var(--fb-accent);
+  }
+}
+
+:root[data-theme='dark'] {
+  --fb-bg: #000000;
+  --fb-surface: #101012;
+  --fb-border: #26262a;
+  --fb-border-strong: #2f2f34;
+  --fb-rule: #1c1c20;
+  --fb-accent: #ff4d6d;
+  --fb-accent-text: #ffb3c1;
+  --fb-accent-mid: #ff8fa3;
+  --fb-accent-bright: #ffe0e6;
+  --fb-accent-faint: #c98a99;
+  --fb-text: #f2f2f3;
+  --fb-text-2: #c9c9cf;
+  --fb-text-3: #9a9aa1;
+  --fb-text-4: #78787f;
+  --fb-text-faint: #5c5c63;
+  --fb-icon-off: #3d3d43;
+  --fb-tint-bg: rgba(255, 77, 109, 0.1);
+  --fb-tint-border: rgba(255, 77, 109, 0.34);
+  --fb-tint-row-bg: rgba(255, 77, 109, 0.12);
+  --fb-tint-row-border: rgba(255, 77, 109, 0.4);
+  --fb-tint-button-bg: rgba(255, 77, 109, 0.12);
+  --fb-tint-button-border: var(--fb-accent);
+}
+
+:root[data-theme='light'] {
+  --fb-bg: #ffffff;
+  --fb-surface: #faf8f9;
+  --fb-border: #ebe6e8;
+  --fb-border-strong: #ddd6d9;
+  --fb-rule: #f0ecee;
+  --fb-accent: #d81e46;
+  --fb-accent-text: #a3163a;
+  --fb-accent-mid: #a3163a;
+  --fb-accent-bright: #a3163a;
+  --fb-accent-faint: #8b5f6b;
+  --fb-text: #171516;
+  --fb-text-2: #463f42;
+  --fb-text-3: #6f6469;
+  --fb-text-4: #6f6469;
+  --fb-text-faint: #c0b6ba;
+  --fb-icon-off: #cfc7cb;
+  --fb-tint-bg: #fff1f4;
+  --fb-tint-border: #f3c9d4;
+  --fb-tint-row-bg: #fff1f4;
+  --fb-tint-row-border: #eda8ba;
+  --fb-tint-button-bg: #fff1f4;
+  --fb-tint-button-border: var(--fb-accent);
 }
 
 * {
@@ -50,15 +142,55 @@ body,
 }
 
 body {
-  background: var(--fb-paper-raised);
-  color: var(--fb-ink);
-  font-family: 'Poppins', sans-serif;
+  background: var(--fb-bg);
+  color: var(--fb-text);
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-.fb-display {
-  font-family: 'Baloo 2', sans-serif;
-  font-weight: 700;
+/* The signature "big-type pair": a noun in 600 weight + accent, the animal
+   directly under it in 300 weight + a de-emphasised tone. Same size and
+   tracking on both lines — hierarchy is size and space, never extra bold. */
+.fb-pair-top {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  color: var(--fb-accent);
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.fb-pair-bottom {
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  color: var(--fb-text-faint);
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.fb-pair-top.on-tint {
+  color: var(--fb-accent-bright);
+}
+.fb-pair-bottom.on-tint {
+  color: var(--fb-accent-faint);
+}
+
+.fb-fading-rule {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 77, 109, 0.5), rgba(255, 77, 109, 0));
+}
+
+.fb-tint-card {
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--fb-tint-bg);
+  border: 1px solid var(--fb-tint-border);
+}
+
+.fb-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fb-accent-mid);
+  margin: 0;
 }
 
 button {
@@ -71,4 +203,26 @@ button {
 
 input {
   font-family: inherit;
+}
+
+.fb-pill-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 11px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.fb-pill-button.primary {
+  background: var(--fb-tint-button-bg);
+  border: 1px solid var(--fb-tint-button-border);
+  color: var(--fb-accent-text);
+}
+.fb-pill-button.ghost {
+  background: transparent;
+  border: 1px solid var(--fb-border-strong);
+  color: var(--fb-text);
 }

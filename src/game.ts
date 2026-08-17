@@ -25,6 +25,17 @@ export function animalName(animals: DBAnimal[], nouns: DBCollectiveNoun[], nounI
   return animals.find((a) => a.id === noun.animal_id)?.name ?? ''
 }
 
+export function etymology(nouns: DBCollectiveNoun[], nounId: string): string | null {
+  return nouns.find((n) => n.id === nounId)?.etymology ?? null
+}
+
+/** Mirrors GameService.unlockCard(nounId:) — safe to call on every correct
+ * answer since (user_id, collective_noun_id) is the table's primary key. */
+export async function unlockCard(nounId: string): Promise<void> {
+  const userId = await ensureSignedIn()
+  await supabase.from('user_cards').insert({ user_id: userId, collective_noun_id: nounId })
+}
+
 /**
  * Returns the correct noun and a shuffled set of 4 options. Distractors are
  * deduped by lowercased *text*, not just animal id — many unrelated animals

@@ -25,19 +25,23 @@ export function PillButton({
         justifyContent: trailing ? 'space-between' : 'center',
         width: style === 'text' ? 'auto' : '100%',
         padding: '14px 18px',
-        borderRadius: 999,
+        borderRadius: 11,
         fontSize: 15,
         fontWeight: 600,
-        fontFamily: "'Poppins', sans-serif",
-        background: style === 'primary' ? 'var(--fb-gradient-primary)' : 'transparent',
-        color: style === 'primary' ? '#fff' : style === 'ghost' ? 'var(--fb-ink)' : 'var(--fb-ink-soft)',
-        border: style === 'ghost' ? '1.5px solid var(--fb-hairline-strong)' : 'none',
-        boxShadow: style === 'primary' ? '0 8px 20px -6px rgba(214,35,79,.55)' : 'none',
+        fontFamily: "'Inter', sans-serif",
+        background: style === 'primary' ? 'var(--fb-tint-button-bg)' : 'transparent',
+        color: style === 'primary' ? 'var(--fb-accent-text)' : style === 'ghost' ? 'var(--fb-text)' : 'var(--fb-text-3)',
+        border:
+          style === 'primary'
+            ? '1px solid var(--fb-tint-button-border)'
+            : style === 'ghost'
+              ? '1px solid var(--fb-border-strong)'
+              : 'none',
         opacity: disabled ? 0.6 : 1,
       }}
     >
       <span>{children}</span>
-      {trailing && <span style={{ color: 'var(--fb-ink-soft)' }}>{trailing}</span>}
+      {trailing && <span style={{ color: 'var(--fb-text-3)' }}>{trailing}</span>}
     </button>
   )
 }

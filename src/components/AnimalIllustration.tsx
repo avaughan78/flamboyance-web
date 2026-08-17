@@ -50,7 +50,8 @@ export function AnimalIllustration({ animalName }: { animalName: string }) {
         height: '100%',
         minHeight: 160,
         borderRadius: 16,
-        background: 'var(--fb-illustration-bg)',
+        background: 'var(--fb-surface)',
+        border: '1px solid var(--fb-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -60,7 +61,7 @@ export function AnimalIllustration({ animalName }: { animalName: string }) {
       {available && frameSrc ? (
         <img src={frameSrc} alt={animalName} style={{ maxWidth: '100%', maxHeight: '100%', padding: 16 }} />
       ) : (
-        <span style={{ fontSize: 34, color: 'var(--fb-ink-soft)', opacity: 0.4 }}>🐾</span>
+        <span style={{ fontSize: 34, color: 'var(--fb-text-4)', opacity: 0.5 }}>🐾</span>
       )}
     </div>
   )
