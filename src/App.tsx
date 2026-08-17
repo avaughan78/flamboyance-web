@@ -110,6 +110,7 @@ export default function App() {
         players={players}
         questionIndex={room.current_question_index}
         totalQuestions={room.question_ids.length}
+        onBack={() => setViewingResults(false)}
       />
     )
   }
@@ -352,10 +353,12 @@ function RoundResultsScreen({
   players,
   questionIndex,
   totalQuestions,
+  onBack,
 }: {
   players: DBRoomPlayer[]
   questionIndex: number
   totalQuestions: number
+  onBack: () => void
 }) {
   return (
     <Shell>
@@ -375,9 +378,12 @@ function RoundResultsScreen({
         ))}
       </div>
       <div style={{ flex: 1 }} />
-      <p style={{ fontSize: 12, color: 'var(--fb-ink-soft)', textAlign: 'center' }}>
+      <p style={{ fontSize: 12, color: 'var(--fb-ink-soft)', textAlign: 'center', margin: '0 0 14px' }}>
         {questionIndex + 1 >= totalQuestions ? 'Waiting for the host to finish…' : 'Waiting for the host…'}
       </p>
+      <PillButton style="ghost" onClick={onBack}>
+        Back to question
+      </PillButton>
     </Shell>
   )
 }
