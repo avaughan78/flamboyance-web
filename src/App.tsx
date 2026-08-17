@@ -77,12 +77,20 @@ export default function App() {
 
   async function handleAnswer(option: string) {
     if (!room || selected) return
+    const questionIndex = room.current_question_index
     setSelected(option)
     try {
-      const response = await submitAnswer(room.id, room.current_question_index, option)
-      setResult(response)
+      const response = await submitAnswer(room.id, questionIndex, option)
+      // The host may have already advanced the room by the time this
+      // resolves — if so, the reset effect has moved on to a new question
+      // and this late response must not overwrite its state.
+      if (roomRef.current?.current_question_index === questionIndex) {
+        setResult(response)
+      }
     } catch {
-      setSelected(null)
+      if (roomRef.current?.current_question_index === questionIndex) {
+        setSelected(null)
+      }
     }
   }
 
