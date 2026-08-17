@@ -1,0 +1,74 @@
+@font-face {
+  font-family: 'Baloo 2';
+  font-weight: 700;
+  src: url('/flamboyance-web/fonts/Baloo2-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 400;
+  src: url('/flamboyance-web/fonts/Poppins-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 600;
+  src: url('/flamboyance-web/fonts/Poppins-SemiBold.ttf') format('truetype');
+}
+
+:root {
+  --fb-paper: #120810;
+  --fb-paper-raised: #200d14;
+  --fb-ink: #ffe9ec;
+  --fb-ink-soft: #d9a9b4;
+  --fb-coral: #ff6b93;
+  --fb-coral-deep: #d6234f;
+  --fb-coral-soft: #341721;
+  --fb-teal: #7ee8b8;
+  --fb-teal-soft: #173d34;
+  --fb-gold: #f0c572;
+  --fb-gold-soft: #3a2e17;
+  --fb-violet: #c792ea;
+  --fb-violet-soft: #2e1f3a;
+  --fb-correct: #4ade80;
+  --fb-correct-soft: #123321;
+  --fb-incorrect: #ff5c5c;
+  --fb-incorrect-soft: #3a1414;
+  --fb-hairline: rgba(255, 255, 255, 0.14);
+  --fb-hairline-strong: rgba(255, 255, 255, 0.24);
+  --fb-gradient-primary: linear-gradient(90deg, var(--fb-coral), var(--fb-coral-deep));
+  --fb-illustration-bg: radial-gradient(circle at 30% 30%, #6b2038, var(--fb-paper-raised) 70%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--fb-paper-raised);
+  color: var(--fb-ink);
+  font-family: 'Poppins', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.fb-display {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+}
