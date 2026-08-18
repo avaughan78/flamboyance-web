@@ -17,10 +17,11 @@ export interface DBRoom {
   id: string
   code: string
   host_id: string
-  status: 'lobby' | 'active' | 'finished'
+  status: 'lobby' | 'active' | 'finished' | 'cancelled'
   current_question_index: number
   question_ids: string[]
   max_players: number
+  question_started_at: string
 }
 
 export interface DBRoomPlayer {

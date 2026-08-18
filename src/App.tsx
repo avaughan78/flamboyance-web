@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DBAnimal, DBCollectiveNoun, DBRoom, DBRoomPlayer, SubmitAnswerResponse } from './types'
 import {
+  cancelRoom,
   choices,
   ensureSignedIn,
   etymology as lookupEtymology,
@@ -17,9 +18,42 @@ import {
 import { AnswerRow, answerRowState } from './components/AnswerRow'
 import { PillButton } from './components/PillButton'
 
+// Mirrors the native app's toolbar leave button (SF Symbol
+// "rectangle.portrait.and.arrow.right") — an exit-door glyph, since there's
+// no icon library here to draw from.
+function LeaveButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Leave"
+      style={{
+        alignSelf: 'flex-end',
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        color: 'var(--fb-text-3)',
+        display: 'flex',
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
+    </button>
+  )
+}
+
 function codeFromUrl(): string {
   return new URLSearchParams(window.location.search).get('code')?.toUpperCase() ?? ''
 }
+
+// Mirrors QuestionView's roundDuration in the native app — a shared,
+// server-timed countdown from `room.question_started_at` so both clients
+// converge on the same instant instead of each one starting whenever its
+// own view happened to appear.
+const ROUND_DURATION = 12
 
 export default function App() {
   const [room, setRoom] = useState<DBRoom | null>(null)
@@ -33,6 +67,7 @@ export default function App() {
   const [options, setOptions] = useState<string[]>([])
   const [correctAnimal, setCorrectAnimal] = useState('')
   const [nounText, setNounText] = useState('')
+  const [secondsRemaining, setSecondsRemaining] = useState(ROUND_DURATION)
 
   const roomRef = useRef<DBRoom | null>(null)
   roomRef.current = room
@@ -72,6 +107,25 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.status, room?.current_question_index, content, userId])
 
+  // Whoever hasn't answered when the countdown hits zero is auto-submitted
+  // as a miss, through the same handleAnswer path as a normal wrong tap.
+  useEffect(() => {
+    if (!room || room.status !== 'active' || selected) return
+    const startedAt = new Date(room.question_started_at).getTime()
+    const tick = () => {
+      const elapsed = (Date.now() - startedAt) / 1000
+      const remaining = Math.max(0, ROUND_DURATION - Math.floor(elapsed))
+      setSecondsRemaining(remaining)
+      if (remaining === 0) {
+        handleAnswer('No answer')
+      }
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.status, room?.current_question_index, selected])
+
   async function handleJoin(code: string, displayName: string) {
     // joinRoom already calls ensureSignedIn() internally — calling it again
     // here in parallel raced two concurrent signInAnonymously() calls,
@@ -109,6 +163,23 @@ export default function App() {
     }
   }
 
+  // Mirrors QuestionView's forfeit() in the native app — a guest just
+  // leaves, but the host ending it here ends it for everyone else too, so
+  // that's called out explicitly before confirming.
+  function handleLeave() {
+    if (!room) return
+    const isHost = userId === room.host_id
+    const message = isHost
+      ? 'Leaving now forfeits the rest of this game and ends it for everyone else too.'
+      : 'Leaving now forfeits the rest of this game.'
+    if (!window.confirm(message)) return
+    if (isHost) {
+      cancelRoom(room.id).finally(() => setRoom(null))
+    } else {
+      setRoom(null)
+    }
+  }
+
   const etymologyForCurrentQuestion = useMemo(() => {
     if (!room || !content) return null
     const nounId = room.question_ids[room.current_question_index]
@@ -127,6 +198,14 @@ export default function App() {
     return <FinishedScreen players={players} />
   }
 
+  // Without this, a non-host player whose host ends the party mid-round just
+  // sat on whatever screen they were on forever — nothing else here ever
+  // reacts to a status change other than 'lobby'/'finished'. Mirrors the
+  // native app's "Party ended" alert.
+  if (room.status === 'cancelled') {
+    return <CancelledScreen onDone={() => setRoom(null)} />
+  }
+
   if (viewingResults) {
     return (
       <RoundResultsScreen
@@ -134,6 +213,7 @@ export default function App() {
         questionIndex={room.current_question_index}
         totalQuestions={room.question_ids.length}
         onBack={() => setViewingResults(false)}
+        onLeave={handleLeave}
       />
     )
   }
@@ -147,6 +227,7 @@ export default function App() {
         correctNoun={nounText}
         etymology={etymologyForCurrentQuestion}
         onNext={() => setViewingResults(true)}
+        onLeave={handleLeave}
       />
     )
   }
@@ -159,6 +240,8 @@ export default function App() {
       options={options}
       selected={selected}
       onSelect={handleAnswer}
+      secondsRemaining={secondsRemaining}
+      onLeave={handleLeave}
     />
   )
 }
@@ -325,6 +408,8 @@ function QuestionScreen({
   options,
   selected,
   onSelect,
+  secondsRemaining,
+  onLeave,
 }: {
   questionIndex: number
   totalQuestions: number
@@ -332,13 +417,24 @@ function QuestionScreen({
   options: string[]
   selected: string | null
   onSelect: (option: string) => void
+  secondsRemaining: number
+  onLeave: () => void
 }) {
   return (
     <Shell>
+      <LeaveButton onClick={onLeave} />
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fb-text-3)' }}>
           <span>
             Question {questionIndex + 1} of {totalQuestions}
+          </span>
+          <span
+            style={{
+              fontVariantNumeric: 'tabular-nums',
+              color: secondsRemaining <= 3 ? 'var(--fb-accent)' : 'var(--fb-text-3)',
+            }}
+          >
+            0:{String(secondsRemaining).padStart(2, '0')}
           </span>
         </div>
         <div style={{ height: 3, borderRadius: 999, background: 'var(--fb-rule)', marginTop: 8, overflow: 'hidden' }}>
@@ -387,6 +483,7 @@ function RevealScreen({
   correctNoun,
   etymology,
   onNext,
+  onLeave,
 }: {
   isCorrect: boolean
   pointsAwarded: number
@@ -394,9 +491,11 @@ function RevealScreen({
   correctNoun: string
   etymology: string | null
   onNext: () => void
+  onLeave: () => void
 }) {
   return (
     <Shell>
+      <LeaveButton onClick={onLeave} />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
         <div
           style={{
@@ -459,14 +558,17 @@ function RoundResultsScreen({
   questionIndex,
   totalQuestions,
   onBack,
+  onLeave,
 }: {
   players: DBRoomPlayer[]
   questionIndex: number
   totalQuestions: number
   onBack: () => void
+  onLeave: () => void
 }) {
   return (
     <Shell>
+      <LeaveButton onClick={onLeave} />
       <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Round {questionIndex + 1} Results</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {players.map((p, i) => (
@@ -489,6 +591,22 @@ function RoundResultsScreen({
       <PillButton style="ghost" onClick={onBack}>
         Back to question
       </PillButton>
+    </Shell>
+  )
+}
+
+function CancelledScreen({ onDone }: { onDone: () => void }) {
+  return (
+    <Shell>
+      <div style={{ flex: 1 }} />
+      <p style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.04em', textAlign: 'center', margin: 0 }}>
+        Party ended
+      </p>
+      <p style={{ fontSize: 14, color: 'var(--fb-text-3)', textAlign: 'center', margin: 0 }}>
+        The host ended this party.
+      </p>
+      <PillButton onClick={onDone}>Done</PillButton>
+      <div style={{ flex: 1 }} />
     </Shell>
   )
 }

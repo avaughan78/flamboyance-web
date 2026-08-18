@@ -128,6 +128,13 @@ export async function joinRoom(code: string, displayName: string): Promise<DBRoo
   return room as DBRoom
 }
 
+/** Mirrors GameService.cancelRoom(roomId:) — the host-initiated end for a
+ * party, so anyone still on that code gets a real "Party ended" signal
+ * instead of sitting on a stale screen forever. */
+export async function cancelRoom(roomId: string): Promise<void> {
+  await supabase.from('rooms').update({ status: 'cancelled' }).eq('id', roomId)
+}
+
 export async function fetchRoom(roomId: string): Promise<DBRoom> {
   const { data, error } = await supabase.from('rooms').select().eq('id', roomId).single()
   if (error || !data) throw error ?? new Error('Room not found')
