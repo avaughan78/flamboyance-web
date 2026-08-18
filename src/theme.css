@@ -1,22 +1,22 @@
 @font-face {
   font-family: 'Inter';
   font-weight: 300;
-  src: url('/flamboyance-web/fonts/Inter-Light.ttf') format('truetype');
+  src: url('/fonts/Inter-Light.ttf') format('truetype');
 }
 @font-face {
   font-family: 'Inter';
   font-weight: 400;
-  src: url('/flamboyance-web/fonts/Inter-Regular.ttf') format('truetype');
+  src: url('/fonts/Inter-Regular.ttf') format('truetype');
 }
 @font-face {
   font-family: 'Inter';
   font-weight: 500;
-  src: url('/flamboyance-web/fonts/Inter-Medium.ttf') format('truetype');
+  src: url('/fonts/Inter-Medium.ttf') format('truetype');
 }
 @font-face {
   font-family: 'Inter';
   font-weight: 600;
-  src: url('/flamboyance-web/fonts/Inter-SemiBold.ttf') format('truetype');
+  src: url('/fonts/Inter-SemiBold.ttf') format('truetype');
 }
 
 /* "Collective" tokens — a neutral ground (black in dark, white in light)
