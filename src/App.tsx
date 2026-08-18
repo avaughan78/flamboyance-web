@@ -5,6 +5,7 @@ import {
   ensureSignedIn,
   etymology as lookupEtymology,
   fetchExistingAnswer,
+  indefiniteArticle,
   joinRoom,
   loadContent,
   nounText as lookupNounText,
@@ -353,7 +354,8 @@ function QuestionScreen({
 
       <div>
         <p className="fb-pair-top" style={{ fontSize: 32 }}>
-          {noun}
+          <span style={{ color: 'var(--fb-text-faint)' }}>{indefiniteArticle(noun)} </span>
+          {noun.toLowerCase()}
         </p>
         <p className="fb-pair-bottom" style={{ fontSize: 32 }}>
           of ______
@@ -426,7 +428,10 @@ function RevealScreen({
           THE WORD
         </p>
         <p className="fb-pair-top on-tint" style={{ fontSize: 40 }}>
-          {correctNoun}
+          <span style={{ color: isCorrect ? 'var(--fb-success-faint)' : 'var(--fb-accent-faint)' }}>
+            {indefiniteArticle(correctNoun)}{' '}
+          </span>
+          {correctNoun.toLowerCase()}
         </p>
         <p className="fb-pair-bottom on-tint" style={{ fontSize: 40 }}>
           of {animalPlural.toLowerCase()}

@@ -35,6 +35,14 @@ export function nounText(nouns: DBCollectiveNoun[], nounId: string): string {
   return nouns.find((n) => n.id === nounId)?.noun ?? ''
 }
 
+/** "Tower" -> "a", "Ambush" -> "an" — mirrors indefiniteArticle(for:) in
+ * the native app's Theme.swift, so both clients render the same
+ * "a tower of giraffes" / "an ambush of tigers" phrasing. */
+export function indefiniteArticle(noun: string): string {
+  const first = noun.toLowerCase()[0]
+  return first && 'aeiou'.includes(first) ? 'an' : 'a'
+}
+
 export function etymology(nouns: DBCollectiveNoun[], nounId: string): string | null {
   return nouns.find((n) => n.id === nounId)?.etymology ?? null
 }
