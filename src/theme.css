@@ -216,6 +216,19 @@ body {
   animation: fb-row-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1.1) backwards;
 }
 
+/* Mirrors ConfettiView.swift's one-shot fall-and-tumble on the native
+   app's Party finished screen. */
+@keyframes fb-confetti-fall {
+  from {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--fb-confetti-drift), 100vh) rotate(var(--fb-confetti-rotate));
+    opacity: 0;
+  }
+}
+
 .fb-tint-card {
   padding: 20px;
   border-radius: 18px;

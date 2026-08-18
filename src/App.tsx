@@ -258,7 +258,7 @@ export default function App() {
   }
 
   if (room.status === 'finished') {
-    return <FinishedScreen players={players} />
+    return <FinishedScreen players={players} currentUserId={userId} />
   }
 
   // Without this, a non-host player whose host ends the party mid-round just
@@ -682,8 +682,8 @@ function RankedRow({
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        padding: '10px 14px',
-        background: isLeader ? 'var(--fb-tint-bg)' : 'transparent',
+        padding: '13px 14px',
+        background: isLeader ? 'var(--fb-tint-row-bg)' : 'transparent',
         animationDelay: `${index * 50}ms`,
       }}
     >
@@ -790,24 +790,70 @@ function CancelledScreen({ onDone }: { onDone: () => void }) {
   )
 }
 
-function FinishedScreen({ players }: { players: DBRoomPlayer[] }) {
+function FinishedScreen({ players, currentUserId }: { players: DBRoomPlayer[]; currentUserId: string | null }) {
   return (
     <Shell>
+      <ConfettiBurst />
       <div style={{ flex: 1 }} />
-      <p style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.04em', textAlign: 'center', margin: 0 }}>
-        Final Results
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
-        {players.map((p, i) => (
-          <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, color: 'var(--fb-text-3)' }}>{String(i + 1).padStart(2, '0')}</span>
-            <Avatar initial={p.display_name.slice(0, 1)} />
-            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{p.display_name}</span>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fb-text)' }}>{p.score}</span>
-          </div>
-        ))}
+      <div>
+        <p className="fb-pair-top" style={{ fontSize: 34, textAlign: 'center' }}>
+          Final
+        </p>
+        <p className="fb-pair-bottom" style={{ fontSize: 34, textAlign: 'center' }}>
+          results
+        </p>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <div style={{ borderRadius: 16, border: '1px solid var(--fb-border)', background: 'var(--fb-surface)', overflow: 'hidden' }}>
+          {players.map((p, i) => (
+            <div key={p.user_id}>
+              <RankedRow index={i} player={p} isMe={p.user_id === currentUserId} roundPoints={{}} />
+              {i < players.length - 1 && <div style={{ height: 1, background: 'var(--fb-rule)' }} />}
+            </div>
+          ))}
+        </div>
       </div>
       <div style={{ flex: 1 }} />
     </Shell>
+  )
+}
+
+// A lightweight CSS-only confetti burst — plain divs falling via a CSS
+// animation rather than JS-driven positions, mirroring ConfettiView.swift's
+// one-shot celebration on the native app's equivalent screen.
+function ConfettiBurst() {
+  const palette = ['var(--fb-accent)', 'var(--fb-accent-bright)', 'var(--fb-success-bright)', '#ffd45a']
+  const pieces = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    color: palette[Math.floor(Math.random() * palette.length)],
+    delay: Math.random() * 0.5,
+    duration: 1.8 + Math.random() * 1.1,
+    drift: Math.random() * 120 - 60,
+    rotate: Math.random() * 540 - 270,
+    width: 6 + Math.random() * 4,
+    height: 8 + Math.random() * 6,
+  }))
+  return (
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+      {pieces.map((p) => (
+        <div
+          key={p.id}
+          style={
+            {
+              position: 'absolute',
+              top: -20,
+              left: `${p.left}%`,
+              width: p.width,
+              height: p.height,
+              background: p.color,
+              animation: `fb-confetti-fall ${p.duration}s ease-in ${p.delay}s forwards`,
+              '--fb-confetti-drift': `${p.drift}px`,
+              '--fb-confetti-rotate': `${p.rotate}deg`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
   )
 }
