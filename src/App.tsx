@@ -682,7 +682,7 @@ function RankedRow({
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        padding: `${isLeader ? 14 : isTopThree ? 11 : 9}px 14px`,
+        padding: '10px 14px',
         background: isLeader ? 'var(--fb-tint-bg)' : 'transparent',
         animationDelay: `${index * 50}ms`,
       }}
