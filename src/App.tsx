@@ -72,7 +72,14 @@ export default function App() {
   }, [room?.status, room?.current_question_index, content, userId])
 
   async function handleJoin(code: string, displayName: string) {
-    const [joinedRoom, uid, loadedContent] = await Promise.all([joinRoom(code, displayName), ensureSignedIn(), loadContent()])
+    // joinRoom already calls ensureSignedIn() internally — calling it again
+    // here in parallel raced two concurrent signInAnonymously() calls,
+    // which could leave the browser's session pointed at a different user
+    // than the one just inserted into room_players, silently orphaning the
+    // join. Awaiting joinRoom first guarantees a session already exists by
+    // the time this resolves, so it's just a cheap cached-session read.
+    const [joinedRoom, loadedContent] = await Promise.all([joinRoom(code, displayName), loadContent()])
+    const uid = await ensureSignedIn()
     setUserId(uid)
     setContent(loadedContent)
     setRoom(joinedRoom)
