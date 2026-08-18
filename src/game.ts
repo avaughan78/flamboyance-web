@@ -169,6 +169,23 @@ export async function fetchExistingAnswer(
   return data
 }
 
+/** Mirrors GameService.fetchRoundAnswers(roomId:questionIndex:) — points
+ * each player scored on this specific round, keyed by user_id, so the
+ * results table can show "+N this round" alongside the running total. */
+export async function fetchRoundAnswers(roomId: string, questionIndex: number): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('round_answers')
+    .select('user_id, points_awarded')
+    .eq('room_id', roomId)
+    .eq('question_index', questionIndex)
+  if (error) throw error
+  const result: Record<string, number> = {}
+  for (const row of data as { user_id: string; points_awarded: number }[]) {
+    if (!(row.user_id in result)) result[row.user_id] = row.points_awarded
+  }
+  return result
+}
+
 export async function submitAnswer(
   roomId: string,
   questionIndex: number,

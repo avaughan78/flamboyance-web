@@ -199,6 +199,23 @@ body {
   background: linear-gradient(90deg, rgba(255, 77, 109, 0.5), rgba(255, 77, 109, 0));
 }
 
+/* Mirrors the staggered spring pop-in on ResultsView's ranked rows in the
+   native app — each row cascades in rather than the whole table appearing
+   at once. */
+@keyframes fb-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fb-row-in {
+  animation: fb-row-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1.1) backwards;
+}
+
 .fb-tint-card {
   padding: 20px;
   border-radius: 18px;

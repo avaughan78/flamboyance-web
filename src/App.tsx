@@ -6,6 +6,7 @@ import {
   ensureSignedIn,
   etymology as lookupEtymology,
   fetchExistingAnswer,
+  fetchRoundAnswers,
   indefiniteArticle,
   joinRoom,
   loadContent,
@@ -121,6 +122,7 @@ export default function App() {
   const [correctAnimal, setCorrectAnimal] = useState('')
   const [nounText, setNounText] = useState('')
   const [secondsRemaining, setSecondsRemaining] = useState(ROUND_DURATION)
+  const [roundPoints, setRoundPoints] = useState<Record<string, number>>({})
 
   const roomRef = useRef<DBRoom | null>(null)
   roomRef.current = room
@@ -178,6 +180,14 @@ export default function App() {
     return () => window.clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.status, room?.current_question_index, selected])
+
+  // Fetched once on entering the standings screen — this page is read-only
+  // for a web guest (no advance/gate logic, unlike the host-side native
+  // screen), so a live poll would be overkill.
+  useEffect(() => {
+    if (!room || !viewingResults) return
+    fetchRoundAnswers(room.id, room.current_question_index).then(setRoundPoints).catch(() => {})
+  }, [viewingResults, room?.id, room?.current_question_index])
 
   async function handleJoin(code: string, displayName: string) {
     // joinRoom already calls ensureSignedIn() internally — calling it again
@@ -265,6 +275,8 @@ export default function App() {
         players={players}
         questionIndex={room.current_question_index}
         totalQuestions={room.question_ids.length}
+        currentUserId={userId}
+        roundPoints={roundPoints}
         onBack={() => setViewingResults(false)}
         onLeave={handleLeave}
       />
@@ -432,19 +444,20 @@ function LobbyScreen({ room, players }: { room: DBRoom; players: DBRoomPlayer[] 
   )
 }
 
-function Avatar({ initial, emphasized = false }: { initial: string; emphasized?: boolean }) {
+function Avatar({ initial, emphasized = false, size = 32 }: { initial: string; emphasized?: boolean; size?: number }) {
   return (
     <div
       style={{
-        width: 32,
-        height: 32,
+        width: size,
+        height: size,
+        flexShrink: 0,
         borderRadius: '50%',
         background: emphasized ? 'var(--fb-tint-row-bg)' : 'var(--fb-surface)',
         border: `1px solid ${emphasized ? 'var(--fb-tint-row-border)' : 'var(--fb-border)'}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 13,
+        fontSize: size * 0.4,
         fontWeight: 600,
         color: emphasized ? 'var(--fb-accent-text)' : 'var(--fb-text-3)',
       }}
@@ -599,34 +612,154 @@ function RevealScreen({
   )
 }
 
+// Mirrors ResultsView.rankBadge in the native app — a crown for 1st, a
+// numbered medal circle for 2nd/3rd, plain rank text below that.
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1) {
+    return (
+      <span style={{ width: 24, display: 'flex', justifyContent: 'center', color: 'var(--fb-accent-text)' }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M2 18h20l-1.6-9-4.9 4.3L12 6.5l-3.5 6.8L3.6 9z" />
+        </svg>
+      </span>
+    )
+  }
+  if (rank <= 3) {
+    return (
+      <span
+        style={{
+          width: 22,
+          height: 22,
+          flexShrink: 0,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          fontWeight: 700,
+          color: 'var(--fb-text-2)',
+          background: 'var(--fb-surface)',
+          border: '1px solid var(--fb-border-strong)',
+        }}
+      >
+        {rank}
+      </span>
+    )
+  }
+  return (
+    <span style={{ width: 24, textAlign: 'center', fontSize: 12, color: 'var(--fb-text-3)', fontVariantNumeric: 'tabular-nums' }}>
+      {String(rank).padStart(2, '0')}
+    </span>
+  )
+}
+
+// Mirrors ResultsView.rankedRow — one table for every player count, with
+// 1st/2nd/3rd escalating in size and getting the medal badge instead of a
+// separate podium block.
+function RankedRow({
+  index,
+  player,
+  isMe,
+  roundPoints,
+}: {
+  index: number
+  player: DBRoomPlayer
+  isMe: boolean
+  roundPoints: Record<string, number>
+}) {
+  const rank = index + 1
+  const isTopThree = rank <= 3
+  const isLeader = rank === 1
+  const avatarSize = isLeader ? 46 : isTopThree ? 38 : 32
+  const nameSize = isLeader ? 17 : isTopThree ? 16 : 15
+  const scoreSize = isLeader ? 22 : isTopThree ? 19 : 16
+  const gained = roundPoints[player.user_id]
+
+  return (
+    <div
+      className="fb-row-in"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: `${isLeader ? 14 : isTopThree ? 11 : 9}px 14px`,
+        background: isLeader ? 'var(--fb-tint-bg)' : 'transparent',
+        animationDelay: `${index * 50}ms`,
+      }}
+    >
+      <RankBadge rank={rank} />
+      <Avatar initial={player.display_name.slice(0, 1)} emphasized={isMe || isLeader} size={avatarSize} />
+      <span style={{ fontSize: nameSize, fontWeight: 600 }}>{player.display_name}</span>
+      {isMe && (
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            color: 'var(--fb-accent-mid)',
+            border: '1px solid var(--fb-accent-mid)',
+            borderRadius: 999,
+            padding: '3px 6px',
+          }}
+        >
+          YOU
+        </span>
+      )}
+      <div style={{ flex: 1 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+        <span
+          style={{
+            fontSize: scoreSize,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            color: isLeader ? 'var(--fb-accent-text)' : 'var(--fb-text)',
+          }}
+        >
+          {player.score}
+        </span>
+        {!!gained && gained > 0 && (
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--fb-success-text)', fontVariantNumeric: 'tabular-nums' }}>
+            +{gained}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function RoundResultsScreen({
   players,
   questionIndex,
   totalQuestions,
+  currentUserId,
+  roundPoints,
   onBack,
   onLeave,
 }: {
   players: DBRoomPlayer[]
   questionIndex: number
   totalQuestions: number
+  currentUserId: string | null
+  roundPoints: Record<string, number>
   onBack: () => void
   onLeave: () => void
 }) {
   return (
     <Shell>
       <LeaveButton onClick={onLeave} />
-      <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Round {questionIndex + 1} Results</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div>
+        <p className="fb-pair-top" style={{ fontSize: 30 }}>
+          Round {questionIndex + 1}
+        </p>
+        <p className="fb-pair-bottom" style={{ fontSize: 30 }}>
+          of {totalQuestions}
+        </p>
+      </div>
+      <div style={{ borderRadius: 16, border: '1px solid var(--fb-border)', background: 'var(--fb-surface)', overflow: 'hidden' }}>
         {players.map((p, i) => (
-          <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, color: 'var(--fb-text-3)', fontVariantNumeric: 'tabular-nums' }}>
-              {String(i + 1).padStart(2, '0')}
-            </span>
-            <Avatar initial={p.display_name.slice(0, 1)} />
-            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{p.display_name}</span>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fb-text)', fontVariantNumeric: 'tabular-nums' }}>
-              {p.score}
-            </span>
+          <div key={p.user_id}>
+            <RankedRow index={i} player={p} isMe={p.user_id === currentUserId} roundPoints={roundPoints} />
+            {i < players.length - 1 && <div style={{ height: 1, background: 'var(--fb-rule)' }} />}
           </div>
         ))}
       </div>
