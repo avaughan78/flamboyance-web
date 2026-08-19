@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.flamboyance.android",
+      "sha256_cert_fingerprints": [
+        "A5:6C:2D:A0:B8:94:B0:BC:1B:9C:23:87:0B:90:51:4D:31:9C:40:5C:C4:89:8C:EA:69:BD:89:21:5E:6B:4A:97"
+      ]
+    }
+  }
+]
