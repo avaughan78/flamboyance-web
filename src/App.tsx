@@ -670,7 +670,7 @@ function RankedRow({
   const rank = index + 1
   const isTopThree = rank <= 3
   const isLeader = rank === 1
-  const avatarSize = isLeader ? 46 : isTopThree ? 38 : 32
+  const avatarSize = isTopThree ? 38 : 32
   const nameSize = isLeader ? 17 : isTopThree ? 16 : 15
   const scoreSize = isLeader ? 22 : isTopThree ? 19 : 16
   const gained = roundPoints[player.user_id]
