@@ -715,7 +715,7 @@ function RankedRow({
             color: isLeader ? 'var(--fb-accent-text)' : 'var(--fb-text)',
           }}
         >
-          {player.score}
+          {player.score.toLocaleString()}
         </span>
         {!!gained && gained > 0 && (
           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--fb-success-text)', fontVariantNumeric: 'tabular-nums' }}>
