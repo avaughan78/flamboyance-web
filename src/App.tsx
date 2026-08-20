@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DBAnimal, DBCollectiveNoun, DBRoom, DBRoomPlayer, SubmitAnswerResponse } from './types'
 import {
   cancelRoom,
+  leaveRoom,
+  leaveRoomOnUnload,
   choices,
   ensureSignedIn,
   etymology as lookupEtymology,
@@ -127,6 +129,17 @@ export default function App() {
   const roomRef = useRef<DBRoom | null>(null)
   roomRef.current = room
 
+  // Closing the tab mid-party used to leave the player's row in
+  // room_players forever — no button tap, no chance to run the normal
+  // async leaveRoom(). Best-effort only; see leaveRoomOnUnload's own note.
+  useEffect(() => {
+    const handler = () => {
+      if (roomRef.current) leaveRoomOnUnload(roomRef.current.id)
+    }
+    window.addEventListener('pagehide', handler)
+    return () => window.removeEventListener('pagehide', handler)
+  }, [])
+
   useEffect(() => {
     if (!room) return
     const stopRoom = observeRoom(room.id, (updated) => setRoom(updated))
@@ -239,7 +252,10 @@ export default function App() {
     if (isHost) {
       cancelRoom(room.id).finally(() => setRoom(null))
     } else {
-      setRoom(null)
+      // Without this, the departing player's row stayed in room_players
+      // forever: still shown to everyone else as present, and blocking
+      // that same player from ever rejoining.
+      leaveRoom(room.id).finally(() => setRoom(null))
     }
   }
 

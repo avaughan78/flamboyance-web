@@ -119,11 +119,19 @@ export async function joinRoom(code: string, displayName: string): Promise<DBRoo
     .single()
   if (roomError || !room) throw roomError ?? new Error('Room not found')
 
+  // room_players is keyed on (room_id, user_id), and rejoining a room
+  // you're already a row in (a page refresh, or you never actually left)
+  // used to hit that primary key. score is deliberately never
+  // client-writable — an UPDATE/upsert path was tried and reverted (see
+  // migration 20260820121500) since PostgREST's upsert sets every payload
+  // column including room_id, which would need a much broader UPDATE grant
+  // than intended. Deleting any stale row first keeps this to INSERT +
+  // DELETE, both already scoped tightly by RLS to your own rows.
+  await supabase.from('room_players').delete().eq('room_id', room.id).eq('user_id', userId)
   const { error: joinError } = await supabase
     .from('room_players')
     .insert({ room_id: room.id, user_id: userId, display_name: displayName })
-  // Ignore "already joined" conflicts (e.g. a page refresh) — everything else should surface.
-  if (joinError && joinError.code !== '23505') throw joinError
+  if (joinError) throw joinError
 
   return room as DBRoom
 }
@@ -133,6 +141,47 @@ export async function joinRoom(code: string, displayName: string): Promise<DBRoo
  * instead of sitting on a stale screen forever. */
 export async function cancelRoom(roomId: string): Promise<void> {
   await supabase.from('rooms').update({ status: 'cancelled' }).eq('id', roomId)
+}
+
+/** Actually removes you from the room, unlike just navigating away locally —
+ * without this, a departing player's row sat in room_players forever: still
+ * shown to everyone else as present, and blocking that same player from
+ * ever rejoining (INSERT/upsert hit the primary key either way pointlessly). */
+export async function leaveRoom(roomId: string): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const userId = sessionData.session?.user.id
+  if (!userId) return
+  await supabase.from('room_players').delete().eq('room_id', roomId).eq('user_id', userId)
+}
+
+/** Best-effort version of leaveRoom for a closed tab, not a tapped button —
+ * there's no async work happening once a tab is actually closing, so this
+ * reads the session straight out of localStorage (synchronous) and fires a
+ * `keepalive` fetch directly at the REST API, bypassing the Supabase client
+ * entirely. Not guaranteed to land (browsers can and do drop unload-time
+ * requests), but it's the only shot available, and better than the row
+ * lingering forever with no attempt at all. */
+export function leaveRoomOnUnload(roomId: string): void {
+  try {
+    const raw = localStorage.getItem('sb-uockbafewpevbpxfelde-auth-token')
+    if (!raw) return
+    const parsed = JSON.parse(raw) as { access_token?: string; user?: { id?: string } }
+    const accessToken = parsed.access_token
+    const userId = parsed.user?.id
+    if (!accessToken || !userId) return
+
+    const anonKey = 'sb_publishable_4v8Z4pmzHHHAUXD2v-z2Ew_rly0xL2q'
+    fetch(
+      `https://uockbafewpevbpxfelde.supabase.co/rest/v1/room_players?room_id=eq.${roomId}&user_id=eq.${userId}`,
+      {
+        method: 'DELETE',
+        keepalive: true,
+        headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}` },
+      },
+    )
+  } catch {
+    // best-effort only — nothing to recover from here
+  }
 }
 
 export async function fetchRoom(roomId: string): Promise<DBRoom> {
