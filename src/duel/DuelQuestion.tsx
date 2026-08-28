@@ -4,7 +4,7 @@ import {
   etymology as lookupEtymology,
   fetchExistingAnswer,
   fetchRoom,
-  fetchRoundAnswers,
+  fetchRoundAnswerDetails,
   indefiniteArticle,
   nounText as lookupNounText,
   submitAnswer,
@@ -19,6 +19,20 @@ import { PillButton } from '../components/PillButton'
 const ROUND_DURATION = 12
 const NEXT_COUNTDOWN_SECONDS = 5
 const OPPONENT_WAIT_POLL_MS = 1000
+
+interface VersusInfo {
+  yourAnswer: string
+  yourTime: string
+  yourCorrect: boolean
+  otherName: string
+  otherAnswer: string
+  otherTime: string
+  otherCorrect: boolean
+}
+
+function formatElapsed(seconds: number): string {
+  return `${seconds.toFixed(1)}s`
+}
 
 export function DuelQuestion({
   room,
@@ -52,6 +66,7 @@ export function DuelQuestion({
   const [etymologyText, setEtymologyText] = useState<string | null>(null)
   const [secondsRemaining, setSecondsRemaining] = useState(ROUND_DURATION)
   const [opponentAnswered, setOpponentAnswered] = useState(false)
+  const [versus, setVersus] = useState<VersusInfo | null>(null)
   const [nextCountdown, setNextCountdown] = useState<number | null>(null)
   const [myReadyTapped, setMyReadyTapped] = useState(false)
 
@@ -74,6 +89,7 @@ export function DuelQuestion({
     setSelected(null)
     setResult(null)
     setOpponentAnswered(false)
+    setVersus(null)
     setNextCountdown(null)
     setMyReadyTapped(false)
     advancingRef.current = false
@@ -134,10 +150,11 @@ export function DuelQuestion({
   useEffect(() => {
     if (!result || opponentAnswered) return
     let cancelled = false
+    const startedAt = new Date(room.question_started_at).getTime()
     const tick = async () => {
       try {
-        const [answers, freshRoom] = await Promise.all([
-          fetchRoundAnswers(room.id, questionIndex),
+        const [details, freshRoom] = await Promise.all([
+          fetchRoundAnswerDetails(room.id, questionIndex),
           fetchRoom(room.id),
         ])
         if (cancelled) return
@@ -145,7 +162,18 @@ export function DuelQuestion({
           onRoomUpdateRef.current(freshRoom)
           return
         }
-        if (opponent && answers[opponent.user_id] !== undefined) {
+        const mine = details.find((d) => d.user_id === userId)
+        const theirs = opponent ? details.find((d) => d.user_id === opponent.user_id) : undefined
+        if (mine && theirs && opponent) {
+          setVersus({
+            yourAnswer: mine.submitted_noun,
+            yourTime: formatElapsed((new Date(mine.answered_at).getTime() - startedAt) / 1000),
+            yourCorrect: mine.is_correct,
+            otherName: opponent.display_name,
+            otherAnswer: theirs.submitted_noun,
+            otherTime: formatElapsed((new Date(theirs.answered_at).getTime() - startedAt) / 1000),
+            otherCorrect: theirs.is_correct,
+          })
           setOpponentAnswered(true)
         }
       } catch {
@@ -159,7 +187,7 @@ export function DuelQuestion({
       window.clearInterval(id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, opponentAnswered, room.id, questionIndex])
+  }, [result, opponentAnswered, room.id, questionIndex, userId])
 
   async function performAdvance() {
     if (advancingRef.current) return
@@ -291,12 +319,19 @@ export function DuelQuestion({
           </div>
         )}
 
+        {versus && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <VersusColumn name="You" answer={versus.yourAnswer} time={versus.yourTime} isCorrect={versus.yourCorrect} />
+            <VersusColumn name={versus.otherName} answer={versus.otherAnswer} time={versus.otherTime} isCorrect={versus.otherCorrect} />
+          </div>
+        )}
+
         <div style={{ flex: 1 }} />
-        <p style={{ fontSize: 12, color: 'var(--fb-text-3)', textAlign: 'center', margin: '0 0 4px' }}>
-          {opponentAnswered
-            ? `${opponent?.display_name ?? 'Opponent'} answered`
-            : `Waiting for ${opponent?.display_name ?? 'opponent'}…`}
-        </p>
+        {!versus && (
+          <p style={{ fontSize: 12, color: 'var(--fb-text-3)', textAlign: 'center', margin: '0 0 4px' }}>
+            Waiting for {opponent?.display_name ?? 'opponent'}…
+          </p>
+        )}
         {myReadyTapped ? (
           <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--fb-text-3)', textAlign: 'center', margin: 0 }}>
             Waiting for {opponent?.display_name ?? 'them'}…
@@ -355,5 +390,33 @@ export function DuelQuestion({
 
       <div style={{ flex: 1 }} />
     </Shell>
+  )
+}
+
+function VersusColumn({ name, answer, time, isCorrect }: { name: string; answer: string; time: string; isCorrect: boolean }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        padding: 14,
+        borderRadius: 14,
+        background: isCorrect ? 'var(--fb-tint-success-bg)' : 'var(--fb-tint-bg)',
+        border: `1px solid ${isCorrect ? 'var(--fb-tint-success-border)' : 'var(--fb-tint-border)'}`,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: '0.01em',
+          margin: 0,
+          color: isCorrect ? 'var(--fb-success-text)' : 'var(--fb-accent-text)',
+        }}
+      >
+        {name}
+      </p>
+      <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--fb-text)', margin: '6px 0 0' }}>{answer}</p>
+      <p style={{ fontSize: 12, color: 'var(--fb-text-4)', margin: '6px 0 0' }}>{time}</p>
+    </div>
   )
 }

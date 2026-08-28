@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Shell, Wordmark, inputStyle } from '../components/Shared'
 import { PillButton } from '../components/PillButton'
 import { joinGameSession } from './partyApi'
+import { edgeFunctionErrorMessage } from '../lib/edgeFunctionError'
 
 function codeFromUrl(): string {
   return new URLSearchParams(window.location.search).get('code')?.toUpperCase() ?? ''
@@ -30,7 +31,7 @@ export function JoinParty({
       const result = await joinGameSession(code.trim(), name.trim())
       onJoined(result.session_id)
     } catch (err) {
-      setError((err as { message?: string })?.message ?? "Couldn't find that party — check the code and try again.")
+      setError((await edgeFunctionErrorMessage(err)) ?? "Couldn't find that party — check the code and try again.")
       setIsJoining(false)
     }
   }

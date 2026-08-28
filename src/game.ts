@@ -235,6 +235,27 @@ export async function fetchRoundAnswers(roomId: string, questionIndex: number): 
   return result
 }
 
+export interface RoundAnswerDetail {
+  user_id: string
+  submitted_noun: string
+  answered_at: string
+  is_correct: boolean
+}
+
+/** Both players' full answers for one Duel question — who said what and
+ * when, so the live "opponent answered" indicator and the Reveal versus
+ * panel can both be built from a single query. Mirrors
+ * GameService.fetchRoundAnswerDetails(roomId:questionIndex:). */
+export async function fetchRoundAnswerDetails(roomId: string, questionIndex: number): Promise<RoundAnswerDetail[]> {
+  const { data, error } = await supabase
+    .from('round_answers')
+    .select('user_id, submitted_noun, answered_at, is_correct')
+    .eq('room_id', roomId)
+    .eq('question_index', questionIndex)
+  if (error) throw error
+  return data as RoundAnswerDetail[]
+}
+
 export async function submitAnswer(
   roomId: string,
   questionIndex: number,
