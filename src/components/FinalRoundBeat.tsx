@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Shell } from '../components/Shared'
+import { Shell } from './Shared'
 
-/** Simple CSS interstitial for "one more to go!" — a v1 stand-in for
- * native's full glow/ring/haptics FinalRoundAnimation. No server
- * round-trip: question_started_at for the final question is already fixed
- * server-side by the time this shows, so the animation's duration doesn't
- * affect either player's actual answer window. */
-export function DuelFinalRound({ onComplete }: { onComplete: () => void }) {
+/** The shared "one more to go!" beat shown the instant a match/party
+ * advances into its last question — used by both Duel and Party (which
+ * detect the trigger independently, each from their own index == count-1
+ * check). A v1 CSS stand-in for native's full glow/ring/haptics
+ * FinalRoundAnimation. No server round-trip: question_started_at for the
+ * final question is already fixed server-side by the time this shows, so
+ * the animation's duration doesn't affect anyone's actual answer window. */
+export function FinalRoundBeat({ onComplete }: { onComplete: () => void }) {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {

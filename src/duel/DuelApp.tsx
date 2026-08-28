@@ -6,7 +6,7 @@ import { DuelMatchmaking } from './DuelMatchmaking'
 import { MatchFound } from './MatchFound'
 import { DuelCountdown } from './DuelCountdown'
 import { DuelQuestion } from './DuelQuestion'
-import { DuelFinalRound } from './DuelFinalRound'
+import { FinalRoundBeat } from '../components/FinalRoundBeat'
 import { DuelResult } from './DuelResult'
 import { Shell } from '../components/Shared'
 import type { DuelMatchResult } from './duelApi'
@@ -141,7 +141,7 @@ export function DuelApp({ onBackToParty }: { onBackToParty: () => void }) {
   }
 
   if (phase === 'finalRound') {
-    return <DuelFinalRound onComplete={() => setPhase('playing')} />
+    return <FinalRoundBeat onComplete={() => setPhase('playing')} />
   }
 
   if (phase === 'result') {
