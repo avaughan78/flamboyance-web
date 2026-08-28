@@ -6,9 +6,10 @@ import {
   editCommunityNoun,
   fetchCommunityNouns,
   moderateCommunityNoun,
+  setFlagged,
   type AdminCreds,
   type CommunityNounRow,
-  type CommunityNounStatus,
+  type Tab,
 } from './adminApi'
 
 const SESSION_KEY = 'fb-admin-creds'
@@ -99,10 +100,10 @@ function LoginScreen({ onSignedIn }: { onSignedIn: (creds: AdminCreds) => void }
   )
 }
 
-const TABS: CommunityNounStatus[] = ['pending', 'approved', 'rejected']
+const TABS: Tab[] = ['pending', 'approved', 'rejected', 'flagged']
 
 function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: () => void }) {
-  const [tab, setTab] = useState<CommunityNounStatus>('pending')
+  const [tab, setTab] = useState<Tab>('pending')
   const [rows, setRows] = useState<CommunityNounRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -139,7 +140,25 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
   }
 
   function handleSaved(updated: CommunityNounRow) {
+    // On the Flagged tab specifically, unflagging should drop the row
+    // from view — that tab's whole query is `flagged = true`, so a row
+    // that's no longer flagged doesn't belong in the current list.
+    if (tab === 'flagged' && !updated.flagged) {
+      setRows((prev) => prev?.filter((r) => r.id !== updated.id) ?? null)
+      return
+    }
     setRows((prev) => prev?.map((r) => (r.id === updated.id ? updated : r)) ?? null)
+  }
+
+  async function toggleFlag(id: string, flagged: boolean) {
+    setBusyId(id)
+    try {
+      handleSaved(await setFlagged(creds, id, flagged))
+    } catch {
+      setError("Couldn't update that submission — try again")
+    } finally {
+      setBusyId(null)
+    }
   }
 
   return (
@@ -188,6 +207,7 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
               busy={busyId === row.id}
               onAct={tab === 'pending' ? act : undefined}
               onSaved={handleSaved}
+              onToggleFlag={toggleFlag}
             />
           ))}
         </div>
@@ -202,12 +222,14 @@ function SubmissionCard({
   busy,
   onAct,
   onSaved,
+  onToggleFlag,
 }: {
   row: CommunityNounRow
   creds: AdminCreds
   busy: boolean
   onAct?: (id: string, action: 'approve' | 'reject') => void
   onSaved: (row: CommunityNounRow) => void
+  onToggleFlag: (id: string, flagged: boolean) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [noun, setNoun] = useState(row.noun)
@@ -275,6 +297,9 @@ function SubmissionCard({
     <div className="fb-tint-card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div>
+          {row.flagged && (
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--fb-accent)', margin: '0 0 2px' }}>🚩 Flagged</p>
+          )}
           <p className="fb-pair-top on-tint" style={{ fontSize: 20 }}>
             A {row.noun}
           </p>
@@ -282,9 +307,18 @@ function SubmissionCard({
             of {row.thing_name}
           </p>
         </div>
-        <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', flexShrink: 0, padding: '4px 0' }}>
-          Edit
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+          <button
+            onClick={() => onToggleFlag(row.id, !row.flagged)}
+            disabled={busy}
+            style={{ fontSize: 12, color: row.flagged ? 'var(--fb-accent)' : 'var(--fb-text-3)', padding: '4px 0' }}
+          >
+            {row.flagged ? 'Unflag' : 'Flag'}
+          </button>
+          <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', padding: '4px 0' }}>
+            Edit
+          </button>
+        </div>
       </div>
       {row.description && (
         <p style={{ fontSize: 13, color: 'var(--fb-text-2)', margin: 0 }}>{row.description}</p>
