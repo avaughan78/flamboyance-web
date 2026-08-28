@@ -3,6 +3,7 @@ import { Shell, Wordmark, inputStyle } from '../components/Shared'
 import { PillButton } from '../components/PillButton'
 import {
   AdminAuthError,
+  editCommunityNoun,
   fetchCommunityNouns,
   moderateCommunityNoun,
   type AdminCreds,
@@ -137,6 +138,10 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
     }
   }
 
+  function handleSaved(updated: CommunityNounRow) {
+    setRows((prev) => prev?.map((r) => (r.id === updated.id ? updated : r)) ?? null)
+  }
+
   return (
     <Shell>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -176,7 +181,14 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {rows.map((row) => (
-            <SubmissionCard key={row.id} row={row} busy={busyId === row.id} onAct={tab === 'pending' ? act : undefined} />
+            <SubmissionCard
+              key={row.id}
+              row={row}
+              creds={creds}
+              busy={busyId === row.id}
+              onAct={tab === 'pending' ? act : undefined}
+              onSaved={handleSaved}
+            />
           ))}
         </div>
       )}
@@ -186,23 +198,93 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
 
 function SubmissionCard({
   row,
+  creds,
   busy,
   onAct,
+  onSaved,
 }: {
   row: CommunityNounRow
+  creds: AdminCreds
   busy: boolean
   onAct?: (id: string, action: 'approve' | 'reject') => void
+  onSaved: (row: CommunityNounRow) => void
 }) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [noun, setNoun] = useState(row.noun)
+  const [thingName, setThingName] = useState(row.thing_name)
+  const [description, setDescription] = useState(row.description ?? '')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  function startEditing() {
+    setNoun(row.noun)
+    setThingName(row.thing_name)
+    setDescription(row.description ?? '')
+    setSaveError(null)
+    setIsEditing(true)
+  }
+
+  async function save() {
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      const updated = await editCommunityNoun(creds, row.id, { noun, thing_name: thingName, description })
+      onSaved(updated)
+      setIsEditing(false)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Couldn't save those changes")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const verdict = row.ai_verdict
+
+  if (isEditing) {
+    return (
+      <div className="fb-tint-card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <input style={inputStyle} value={noun} onChange={(e) => setNoun(e.target.value)} placeholder="Noun" maxLength={40} />
+        <input
+          style={inputStyle}
+          value={thingName}
+          onChange={(e) => setThingName(e.target.value)}
+          placeholder="Thing"
+          maxLength={60}
+        />
+        <textarea
+          style={{ ...inputStyle, resize: 'vertical', minHeight: 60, fontFamily: 'inherit' }}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Description (optional)"
+          maxLength={500}
+        />
+        {saveError && <p style={{ color: 'var(--fb-accent)', fontSize: 13, margin: 0 }}>{saveError}</p>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <PillButton disabled={isSaving || !noun.trim() || !thingName.trim()} onClick={save}>
+            {isSaving ? 'Saving…' : 'Save'}
+          </PillButton>
+          <PillButton style="ghost" disabled={isSaving} onClick={() => setIsEditing(false)}>
+            Cancel
+          </PillButton>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fb-tint-card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div>
-        <p className="fb-pair-top on-tint" style={{ fontSize: 20 }}>
-          A {row.noun}
-        </p>
-        <p className="fb-pair-bottom on-tint" style={{ fontSize: 20 }}>
-          of {row.thing_name}
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div>
+          <p className="fb-pair-top on-tint" style={{ fontSize: 20 }}>
+            A {row.noun}
+          </p>
+          <p className="fb-pair-bottom on-tint" style={{ fontSize: 20 }}>
+            of {row.thing_name}
+          </p>
+        </div>
+        <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', flexShrink: 0, padding: '4px 0' }}>
+          Edit
+        </button>
       </div>
       {row.description && (
         <p style={{ fontSize: 13, color: 'var(--fb-text-2)', margin: 0 }}>{row.description}</p>

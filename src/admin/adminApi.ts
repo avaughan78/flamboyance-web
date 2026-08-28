@@ -49,3 +49,18 @@ export async function moderateCommunityNoun(creds: AdminCreds, id: string, actio
   })
   if (!res.ok) throw new Error('Could not update that submission')
 }
+
+export async function editCommunityNoun(
+  creds: AdminCreds,
+  id: string,
+  fields: { noun: string; thing_name: string; description: string }
+): Promise<CommunityNounRow> {
+  const res = await adminFetch(creds, '', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, action: 'edit', ...fields }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Could not save those changes')
+  return body.row
+}
