@@ -22,6 +22,8 @@ export interface DBRoom {
   question_ids: string[]
   max_players: number
   question_started_at: string
+  is_rated: boolean
+  forfeited_user_id: string | null
 }
 
 export interface DBRoomPlayer {
@@ -29,6 +31,9 @@ export interface DBRoomPlayer {
   user_id: string
   display_name: string
   score: number
+  rating_delta: number | null
+  ready_at: string | null
+  ready_round: number | null
 }
 
 export interface SubmitAnswerResponse {

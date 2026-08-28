@@ -1,0 +1,163 @@
+import { useEffect, useRef, useState } from 'react'
+import type { DBAnimal, DBCollectiveNoun, DBRoom, DBRoomPlayer } from '../types'
+import { ensureSignedIn, fetchPlayers, fetchRoom, loadContent } from '../game'
+import { DuelHome } from './DuelHome'
+import { DuelMatchmaking } from './DuelMatchmaking'
+import { MatchFound } from './MatchFound'
+import { DuelCountdown } from './DuelCountdown'
+import { DuelQuestion } from './DuelQuestion'
+import { DuelFinalRound } from './DuelFinalRound'
+import { DuelResult } from './DuelResult'
+import { Shell } from '../components/Shared'
+import type { DuelMatchResult } from './duelApi'
+
+type Phase = 'home' | 'queued' | 'matchFound' | 'countdown' | 'playing' | 'finalRound' | 'result'
+
+/** Top-level state machine for Duel, mirroring App.tsx's own pattern
+ * (one owner of state/effects, presentational screens underneath) but
+ * scoped entirely to its own module — the existing Party/room-join flow
+ * in App.tsx is untouched. */
+export function DuelApp({ onBackToParty }: { onBackToParty: () => void }) {
+  const [phase, setPhase] = useState<Phase>('home')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [content, setContent] = useState<{ animals: DBAnimal[]; nouns: DBCollectiveNoun[] } | null>(null)
+
+  const [queueName, setQueueName] = useState('')
+  const [preferredOpponentId, setPreferredOpponentId] = useState<string | null>(null)
+  const [shareCode, setShareCode] = useState<string | null>(null)
+
+  const [matchResult, setMatchResult] = useState<DuelMatchResult | null>(null)
+  const [room, setRoom] = useState<DBRoom | null>(null)
+  const [players, setPlayers] = useState<DBRoomPlayer[]>([])
+
+  const roomRef = useRef<DBRoom | null>(null)
+  roomRef.current = room
+
+  useEffect(() => {
+    ensureSignedIn().then(setUserId)
+    loadContent().then(setContent)
+  }, [])
+
+  async function refreshPlayers(roomId: string) {
+    try {
+      setPlayers(await fetchPlayers(roomId))
+    } catch {
+      // next poll/transition retries
+    }
+  }
+
+  function resetToHome() {
+    setRoom(null)
+    setPlayers([])
+    setMatchResult(null)
+    setPhase('home')
+  }
+
+  function handleStartQueue(displayName: string, opponentId: string | null, code: string | null) {
+    setQueueName(displayName)
+    setPreferredOpponentId(opponentId)
+    setShareCode(code)
+    setPhase('queued')
+  }
+
+  async function handleMatched(result: DuelMatchResult) {
+    if (!result.room_id) return
+    setMatchResult(result)
+    const [fetchedRoom] = await Promise.all([fetchRoom(result.room_id), refreshPlayers(result.room_id)])
+    setRoom(fetchedRoom)
+    setPhase('matchFound')
+  }
+
+  async function handleReady(updatedRoom: DBRoom) {
+    setRoom(updatedRoom)
+    await refreshPlayers(updatedRoom.id)
+    setPhase('countdown')
+  }
+
+  function handleRoundAdvanced(newRoom: DBRoom, isFinalRoundNext: boolean) {
+    setRoom(newRoom);
+    setPhase(isFinalRoundNext ? 'finalRound' : 'playing')
+  }
+
+  // Covers the case where the match resolves mid-round without either
+  // player reaching the natural "last question -> Finish" path — an AFK
+  // forfeit, most likely, since check_duel_afk_forfeit runs inside
+  // advance-duel-round/mark-round-ready on every round transition.
+  async function handleRoomUpdate(updatedRoom: DBRoom) {
+    setRoom(updatedRoom)
+    if (updatedRoom.status === 'finished') {
+      await refreshPlayers(updatedRoom.id)
+      setPhase('result')
+    }
+  }
+
+  async function handleGameOver() {
+    if (roomRef.current) await refreshPlayers(roomRef.current.id)
+    setPhase('result')
+  }
+
+  if (phase === 'home') {
+    return <DuelHome onStartQueue={handleStartQueue} onBack={onBackToParty} />
+  }
+
+  if (phase === 'queued') {
+    return (
+      <DuelMatchmaking
+        displayName={queueName}
+        preferredOpponentId={preferredOpponentId}
+        shareCode={shareCode}
+        currentUserId={userId}
+        onMatched={handleMatched}
+        onCancel={resetToHome}
+      />
+    )
+  }
+
+  if (!room || !content || !userId) {
+    return (
+      <Shell>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ fontSize: 14, color: 'var(--fb-text-3)' }}>Loading…</p>
+        </div>
+      </Shell>
+    )
+  }
+
+  if (phase === 'matchFound') {
+    return (
+      <MatchFound
+        room={room}
+        opponentName={matchResult?.opponent_name ?? 'Opponent'}
+        opponentRating={matchResult?.opponent_rating ?? 1000}
+        yourRating={matchResult?.your_rating ?? 1000}
+        onReady={handleReady}
+        onLeave={resetToHome}
+      />
+    )
+  }
+
+  if (phase === 'countdown') {
+    return <DuelCountdown onComplete={() => setPhase('playing')} />
+  }
+
+  if (phase === 'finalRound') {
+    return <DuelFinalRound onComplete={() => setPhase('playing')} />
+  }
+
+  if (phase === 'result') {
+    return <DuelResult room={room} players={players} userId={userId} onDone={resetToHome} />
+  }
+
+  return (
+    <DuelQuestion
+      room={room}
+      players={players}
+      userId={userId}
+      content={content}
+      onRoundAdvanced={handleRoundAdvanced}
+      onGameOver={handleGameOver}
+      onRoomUpdate={handleRoomUpdate}
+      onLeave={resetToHome}
+    />
+  )
+}

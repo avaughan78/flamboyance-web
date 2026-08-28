@@ -229,6 +229,23 @@ body {
   }
 }
 
+@keyframes fb-countdown-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .fb-tint-card {
   padding: 20px;
   border-radius: 18px;
