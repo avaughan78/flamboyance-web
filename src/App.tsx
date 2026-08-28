@@ -3,9 +3,14 @@ import { Shell, Wordmark } from './components/Shared'
 import { PillButton } from './components/PillButton'
 import { DuelApp } from './duel/DuelApp'
 import { PartyApp } from './party/PartyApp'
+import { AdminApp } from './admin/AdminApp'
 
 function codeFromUrl(): string {
   return new URLSearchParams(window.location.search).get('code')?.toUpperCase() ?? ''
+}
+
+function isAdminUrl(): boolean {
+  return new URLSearchParams(window.location.search).has('admin')
 }
 
 export default function App() {
@@ -13,6 +18,9 @@ export default function App() {
   // straight past the landing choice for that case, same as today.
   const [mode, setMode] = useState<'landing' | 'party' | 'duel'>(codeFromUrl() ? 'party' : 'landing')
 
+  if (isAdminUrl()) {
+    return <AdminApp />
+  }
   if (mode === 'duel') {
     return <DuelApp onBackToParty={() => setMode('landing')} />
   }
