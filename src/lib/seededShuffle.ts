@@ -1,4 +1,4 @@
-import type { DBAnimal, DBCollectiveNoun } from '../types'
+import type { DBAnimal, DBCollectiveNoun, DBCommunityNoun } from '../types'
 
 const MASK64 = 0xffffffffffffffffn
 
@@ -96,4 +96,39 @@ export function choices(
   const options = [...distractors, correctAnimal.plural_name]
   shuffleInPlaceSeeded(options, new Splitmix64(fnv1aHash64(seed + '-order')))
   return { correct: correctAnimal.plural_name, options }
+}
+
+/**
+ * Community-pool equivalent of `choices` — bit-for-bit port of
+ * `GameService.communityChoices(for:seed:)`. Distractors are deduped by
+ * thing_name (not row id): several different submissions can legitimately
+ * share the same "thing" (e.g. seven different words all "of Linguists"),
+ * so a naive per-row dedupe could show the same answer text twice in one
+ * question's options.
+ */
+export function communityChoices(
+  nouns: DBCommunityNoun[],
+  communityNounId: string,
+  seed: string
+): { correct: string; options: string[] } {
+  const target = nouns.find((n) => n.id === communityNounId)
+  if (!target) return { correct: '', options: [] }
+
+  const candidates = nouns
+    .filter((n) => n.id !== communityNounId && n.thing_name !== target.thing_name)
+    .sort((a, b) => a.id.toLowerCase().localeCompare(b.id.toLowerCase()))
+  shuffleInPlaceSeeded(candidates, new Splitmix64(fnv1aHash64(seed)))
+
+  const seenThings = new Set<string>()
+  const distractors: string[] = []
+  for (const candidate of candidates) {
+    if (seenThings.has(candidate.thing_name)) continue
+    seenThings.add(candidate.thing_name)
+    distractors.push(candidate.thing_name)
+    if (distractors.length === 3) break
+  }
+
+  const options = [...distractors, target.thing_name]
+  shuffleInPlaceSeeded(options, new Splitmix64(fnv1aHash64(seed + '-order')))
+  return { correct: target.thing_name, options }
 }

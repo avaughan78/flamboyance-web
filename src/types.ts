@@ -13,6 +13,22 @@ export interface DBCollectiveNoun {
   etymology: string | null
 }
 
+/** A player-submitted collective noun for anything, not just animals —
+ * mirrors DBCommunityNoun in the native apps' GameModels.swift/Models.kt. */
+export interface DBCommunityNoun {
+  id: string
+  noun: string
+  thing_name: string
+  description: string | null
+  status: string
+  likes_count: number
+}
+
+/** Which content a room/session is drawing questions from — official
+ * animals/collective_nouns, or player-submitted community_nouns. Mirrors
+ * ContentPool in the native apps. */
+export type ContentPool = 'original' | 'community'
+
 export interface DBRoom {
   id: string
   code: string
@@ -24,6 +40,7 @@ export interface DBRoom {
   question_started_at: string
   is_rated: boolean
   forfeited_user_id: string | null
+  content_pool: ContentPool
 }
 
 export interface DBRoomPlayer {
@@ -54,6 +71,7 @@ export interface DBGameSession {
   standings_gate_initiated_at: string | null
   standings_gate_timeout_at: string | null
   max_players: number
+  content_pool: ContentPool
 }
 
 export interface DBGamePlayer {

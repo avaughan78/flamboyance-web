@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { DBAnimal, DBCollectiveNoun, DBRoom, DBRoomPlayer, SubmitAnswerResponse } from './types'
+import type { DBAnimal, DBCollectiveNoun, DBCommunityNoun, DBRoom, DBRoomPlayer, SubmitAnswerResponse } from './types'
 
 let contentPromise: Promise<{ animals: DBAnimal[]; nouns: DBCollectiveNoun[] }> | null = null
 
@@ -17,6 +17,33 @@ export function loadContent() {
     })()
   }
   return contentPromise
+}
+
+let communityContentPromise: Promise<{ enabled: boolean; nouns: DBCommunityNoun[] }> | null = null
+
+/** Loads the community_nouns feature flag plus, if it's on, every approved
+ * submission — mirrors GameService.loadCommunityContent(). Cached for the
+ * session like loadContent(). Only ever fetches `status = 'approved'`
+ * rows; that filter is the entire enforcement point for "nothing goes
+ * live without a human approving it." `enabled` gates whether a picker
+ * should even offer Community as an option, the same kill-switch the
+ * native apps' Home toggle respects. */
+export function loadCommunityContent() {
+  if (!communityContentPromise) {
+    communityContentPromise = (async () => {
+      const { data: flags } = await supabase.from('feature_flags').select('enabled').eq('key', 'community_nouns')
+      const enabled = ((flags as { enabled: boolean }[] | null) ?? [])[0]?.enabled ?? false
+      if (!enabled) return { enabled: false, nouns: [] }
+      const { data, error } = await supabase.from('community_nouns').select().eq('status', 'approved')
+      if (error) throw error
+      return { enabled: true, nouns: data as DBCommunityNoun[] }
+    })()
+  }
+  return communityContentPromise
+}
+
+export function communityNounText(nouns: DBCommunityNoun[], id: string): string {
+  return nouns.find((n) => n.id === id)?.noun ?? ''
 }
 
 export function animalName(animals: DBAnimal[], nouns: DBCollectiveNoun[], nounId: string): string {
@@ -52,6 +79,15 @@ export function etymology(nouns: DBCollectiveNoun[], nounId: string): string | n
 export async function unlockCard(nounId: string): Promise<void> {
   const userId = await ensureSignedIn()
   await supabase.from('user_cards').insert({ user_id: userId, collective_noun_id: nounId })
+}
+
+/** Community-pool equivalent of unlockCard, against user_community_unlocks
+ * instead of user_cards — mirrors GameService.unlockCommunityCard(). Keeps
+ * a web player's community Discovered progress in sync with native even
+ * though web itself has no Discovered screen of its own. */
+export async function unlockCommunityCard(communityNounId: string): Promise<void> {
+  const userId = await ensureSignedIn()
+  await supabase.from('user_community_unlocks').insert({ user_id: userId, community_noun_id: communityNounId })
 }
 
 /**

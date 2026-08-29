@@ -152,6 +152,70 @@
   --fb-success-faint: #5c8f6d;
 }
 
+/* Community-pool accent swap — same blue values as the native apps'
+   ThemeManager.isCommunity (Theme.swift / Theme.kt), applied via a
+   `data-community="true"` attribute rather than a class so it composes
+   cleanly with the existing `data-theme` override attribute below. Only
+   the accent-family tokens change; backgrounds, text, and success/error
+   stay put, same as native. */
+:root[data-community='true'] {
+  --fb-accent: #4d9dff;
+  --fb-accent-text: #bfdbfe;
+  --fb-accent-mid: #93c5fd;
+  --fb-accent-bright: #dbeafe;
+  --fb-accent-faint: #8fa8cc;
+  --fb-tint-bg: rgba(77, 157, 255, 0.1);
+  --fb-tint-border: rgba(77, 157, 255, 0.34);
+  --fb-tint-row-bg: rgba(77, 157, 255, 0.12);
+  --fb-tint-row-border: rgba(77, 157, 255, 0.4);
+  --fb-tint-button-bg: rgba(77, 157, 255, 0.12);
+  --fb-tint-button-border: var(--fb-accent);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-community='true'] {
+    --fb-accent: #1d4ed8;
+    --fb-accent-text: #1e40af;
+    --fb-accent-mid: #1e40af;
+    --fb-accent-bright: #1e40af;
+    --fb-accent-faint: #5d7ba6;
+    --fb-tint-bg: #eff5ff;
+    --fb-tint-border: #c7ddfb;
+    --fb-tint-row-bg: #eff5ff;
+    --fb-tint-row-border: #afcbf2;
+    --fb-tint-button-bg: #eff5ff;
+    --fb-tint-button-border: var(--fb-accent);
+  }
+}
+
+:root[data-theme='dark'][data-community='true'] {
+  --fb-accent: #4d9dff;
+  --fb-accent-text: #bfdbfe;
+  --fb-accent-mid: #93c5fd;
+  --fb-accent-bright: #dbeafe;
+  --fb-accent-faint: #8fa8cc;
+  --fb-tint-bg: rgba(77, 157, 255, 0.1);
+  --fb-tint-border: rgba(77, 157, 255, 0.34);
+  --fb-tint-row-bg: rgba(77, 157, 255, 0.12);
+  --fb-tint-row-border: rgba(77, 157, 255, 0.4);
+  --fb-tint-button-bg: rgba(77, 157, 255, 0.12);
+  --fb-tint-button-border: var(--fb-accent);
+}
+
+:root[data-theme='light'][data-community='true'] {
+  --fb-accent: #1d4ed8;
+  --fb-accent-text: #1e40af;
+  --fb-accent-mid: #1e40af;
+  --fb-accent-bright: #1e40af;
+  --fb-accent-faint: #5d7ba6;
+  --fb-tint-bg: #eff5ff;
+  --fb-tint-border: #c7ddfb;
+  --fb-tint-row-bg: #eff5ff;
+  --fb-tint-row-border: #afcbf2;
+  --fb-tint-button-bg: #eff5ff;
+  --fb-tint-button-border: var(--fb-accent);
+}
+
 * {
   box-sizing: border-box;
 }

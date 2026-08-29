@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { DBAnimal, DBCollectiveNoun, DBGamePlayer, DBGameSession } from '../types'
-import { ensureSignedIn, loadContent } from '../game'
+import type { DBAnimal, DBCollectiveNoun, DBCommunityNoun, DBGamePlayer, DBGameSession } from '../types'
+import { ensureSignedIn, loadCommunityContent, loadContent } from '../game'
+import { setCommunityTheme } from '../theme'
 import { fetchGamePlayers, leaveGameSession } from './partyApi'
 import { JoinParty } from './JoinParty'
 import { PartyLobby } from './PartyLobby'
@@ -25,11 +26,30 @@ export function PartyApp({ onBackToLanding }: { onBackToLanding: () => void }) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [session, setSession] = useState<DBGameSession | null>(null)
   const [players, setPlayers] = useState<DBGamePlayer[]>([])
+  const [communityNouns, setCommunityNouns] = useState<DBCommunityNoun[]>([])
 
   useEffect(() => {
     ensureSignedIn().then(setUserId)
     loadContent().then(setContent)
   }, [])
+
+  // The session only carries a real content_pool once the host actually
+  // starts the game (default is 'original' until then) — mirrors native's
+  // per-screen ThemeManager.isCommunity sets (PartyQuestionView,
+  // PartyStandingsView, PartyFinishedView all independently read
+  // session/room.contentPool) but consolidated here since every phase
+  // after 'lobby' shares the same `session` state.
+  useEffect(() => {
+    setCommunityTheme(session?.content_pool === 'community')
+  }, [session?.content_pool])
+
+  useEffect(() => {
+    if (session?.content_pool === 'community' && communityNouns.length === 0) {
+      loadCommunityContent()
+        .then((c) => setCommunityNouns(c.nouns))
+        .catch(() => {})
+    }
+  }, [session?.content_pool, communityNouns.length])
 
   async function refreshPlayers(id: string) {
     try {
@@ -43,6 +63,8 @@ export function PartyApp({ onBackToLanding }: { onBackToLanding: () => void }) {
     setSessionId(null)
     setSession(null)
     setPlayers([])
+    setCommunityNouns([])
+    setCommunityTheme(false)
     setPhase('join')
   }
 
@@ -162,6 +184,7 @@ export function PartyApp({ onBackToLanding }: { onBackToLanding: () => void }) {
     <PartyQuestion
       session={session}
       content={content}
+      communityNouns={communityNouns}
       onGoToStandings={() => setPhase('standings')}
       onSessionChanged={routeForSession}
       onLeave={handleLeave}

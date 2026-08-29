@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DBAnimal, DBCollectiveNoun, DBGameSession } from '../types'
-import { etymology as lookupEtymology, indefiniteArticle, nounText as lookupNounText, unlockCard } from '../game'
-import { choices } from '../lib/seededShuffle'
+import type { DBAnimal, DBCollectiveNoun, DBCommunityNoun, DBGameSession } from '../types'
+import {
+  etymology as lookupEtymology,
+  communityNounText as lookupCommunityNounText,
+  indefiniteArticle,
+  nounText as lookupNounText,
+  unlockCard,
+  unlockCommunityCard,
+} from '../game'
+import { choices, communityChoices } from '../lib/seededShuffle'
 import { fetchGameSession, heartbeat, submitPartyAnswer, type SubmitPartyAnswerResponse } from './partyApi'
 import { Shell, LeaveButton, CountdownRing } from '../components/Shared'
 import { AnswerRow, answerRowState } from '../components/AnswerRow'
@@ -15,16 +22,19 @@ const SESSION_POLL_MS = 1000
 export function PartyQuestion({
   session,
   content,
+  communityNouns,
   onGoToStandings,
   onSessionChanged,
   onLeave,
 }: {
   session: DBGameSession
   content: { animals: DBAnimal[]; nouns: DBCollectiveNoun[] }
+  communityNouns: DBCommunityNoun[]
   onGoToStandings: () => void
   onSessionChanged: (session: DBGameSession) => void
   onLeave: () => void
 }) {
+  const isCommunity = session.content_pool === 'community'
   const questionIndex = session.current_question_index
   const totalQuestions = session.total_questions
 
@@ -52,12 +62,21 @@ export function PartyQuestion({
     advancedRef.current = false
 
     const seed = `${session.id.toLowerCase()}-${questionIndex}`
-    const picked = choices(content.animals, content.nouns, nounId, seed)
-    setOptions(picked.options)
-    setNounText(lookupNounText(content.nouns, nounId))
-    setEtymologyText(lookupEtymology(content.nouns, nounId))
+    if (isCommunity) {
+      const picked = communityChoices(communityNouns, nounId, seed)
+      setOptions(picked.options)
+      setNounText(lookupCommunityNounText(communityNouns, nounId))
+      // Community submissions have no etymology field — mirrors native's
+      // Reveal, which never shows a "WHERE IT COMES FROM" section here.
+      setEtymologyText(null)
+    } else {
+      const picked = choices(content.animals, content.nouns, nounId, seed)
+      setOptions(picked.options)
+      setNounText(lookupNounText(content.nouns, nounId))
+      setEtymologyText(lookupEtymology(content.nouns, nounId))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.id, questionIndex])
+  }, [session.id, questionIndex, isCommunity, communityNouns.length])
 
   async function handleAnswer(option: string) {
     if (selected) return
@@ -66,7 +85,9 @@ export function PartyQuestion({
       const response = await submitPartyAnswer(session.id, questionIndex, option)
       setResult(response)
       const nounId = session.question_ids[questionIndex]
-      if (response.is_correct && nounId) unlockCard(nounId).catch(() => {})
+      if (response.is_correct && nounId) {
+        (isCommunity ? unlockCommunityCard(nounId) : unlockCard(nounId)).catch(() => {})
+      }
     } catch {
       setSelected(null)
     }

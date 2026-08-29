@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DBAnimal, DBCollectiveNoun, DBRoom, DBRoomPlayer, SubmitAnswerResponse } from '../types'
+import type { DBAnimal, DBCollectiveNoun, DBCommunityNoun, DBRoom, DBRoomPlayer, SubmitAnswerResponse } from '../types'
 import {
   etymology as lookupEtymology,
+  communityNounText as lookupCommunityNounText,
   fetchExistingAnswer,
   fetchRoom,
   fetchRoundAnswerDetails,
@@ -9,8 +10,9 @@ import {
   nounText as lookupNounText,
   submitAnswer,
   unlockCard,
+  unlockCommunityCard,
 } from '../game'
-import { choices } from '../lib/seededShuffle'
+import { choices, communityChoices } from '../lib/seededShuffle'
 import { advanceDuelRound, markRoundReady } from './duelApi'
 import { Shell, LeaveButton, CountdownRing } from '../components/Shared'
 import { AnswerRow, answerRowState } from '../components/AnswerRow'
@@ -39,6 +41,7 @@ export function DuelQuestion({
   players,
   userId,
   content,
+  communityNouns,
   onRoundAdvanced,
   onGameOver,
   onRoomUpdate,
@@ -48,11 +51,13 @@ export function DuelQuestion({
   players: DBRoomPlayer[]
   userId: string
   content: { animals: DBAnimal[]; nouns: DBCollectiveNoun[] }
+  communityNouns: DBCommunityNoun[]
   onRoundAdvanced: (room: DBRoom, isFinalRoundNext: boolean) => void
   onGameOver: () => void
   onRoomUpdate: (room: DBRoom) => void
   onLeave: () => void
 }) {
+  const isCommunity = room.content_pool === 'community'
   const questionIndex = room.current_question_index
   const totalQuestions = room.question_ids.length
   const isLastQuestion = questionIndex === totalQuestions - 1
@@ -95,11 +100,21 @@ export function DuelQuestion({
     advancingRef.current = false
 
     const seed = `${room.id.toLowerCase()}-${questionIndex}`
-    const picked = choices(content.animals, content.nouns, nounId, seed)
-    setCorrectAnimal(picked.correct)
-    setOptions(picked.options)
-    setNounText(lookupNounText(content.nouns, nounId))
-    setEtymologyText(lookupEtymology(content.nouns, nounId))
+    if (isCommunity) {
+      const picked = communityChoices(communityNouns, nounId, seed)
+      setCorrectAnimal(picked.correct)
+      setOptions(picked.options)
+      setNounText(lookupCommunityNounText(communityNouns, nounId))
+      // Community submissions have no etymology field — mirrors native's
+      // Reveal, which never shows a "WHERE IT COMES FROM" section here.
+      setEtymologyText(null)
+    } else {
+      const picked = choices(content.animals, content.nouns, nounId, seed)
+      setCorrectAnimal(picked.correct)
+      setOptions(picked.options)
+      setNounText(lookupNounText(content.nouns, nounId))
+      setEtymologyText(lookupEtymology(content.nouns, nounId))
+    }
 
     fetchExistingAnswer(room.id, questionIndex, userId).then((existing) => {
       if (existing) {
@@ -108,7 +123,7 @@ export function DuelQuestion({
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room.id, questionIndex])
+  }, [room.id, questionIndex, isCommunity, communityNouns.length])
 
   async function handleAnswer(option: string) {
     if (selected) return
@@ -118,7 +133,9 @@ export function DuelQuestion({
       if (roomRef.current.current_question_index !== questionIndex) return
       setResult(response)
       const nounId = room.question_ids[questionIndex]
-      if (response.is_correct && nounId) unlockCard(nounId).catch(() => {})
+      if (response.is_correct && nounId) {
+        (isCommunity ? unlockCommunityCard(nounId) : unlockCard(nounId)).catch(() => {})
+      }
     } catch {
       if (roomRef.current.current_question_index === questionIndex) setSelected(null)
     }

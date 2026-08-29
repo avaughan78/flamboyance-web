@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DBAnimal, DBCollectiveNoun, DBRoom, DBRoomPlayer } from '../types'
-import { ensureSignedIn, fetchPlayers, fetchRoom, loadContent } from '../game'
+import type { DBAnimal, DBCollectiveNoun, DBCommunityNoun, DBRoom, DBRoomPlayer } from '../types'
+import { ensureSignedIn, fetchPlayers, fetchRoom, loadCommunityContent, loadContent } from '../game'
+import { setCommunityTheme } from '../theme'
 import { DuelHome } from './DuelHome'
 import { DuelMatchmaking } from './DuelMatchmaking'
 import { MatchFound } from './MatchFound'
@@ -29,6 +30,8 @@ export function DuelApp({ onBackToParty }: { onBackToParty: () => void }) {
   const [matchResult, setMatchResult] = useState<DuelMatchResult | null>(null)
   const [room, setRoom] = useState<DBRoom | null>(null)
   const [players, setPlayers] = useState<DBRoomPlayer[]>([])
+  const [communityNouns, setCommunityNouns] = useState<DBCommunityNoun[]>([])
+  const [communityEnabled, setCommunityEnabled] = useState(false)
 
   const roomRef = useRef<DBRoom | null>(null)
   roomRef.current = room
@@ -36,7 +39,39 @@ export function DuelApp({ onBackToParty }: { onBackToParty: () => void }) {
   useEffect(() => {
     ensureSignedIn().then(setUserId)
     loadContent().then(setContent)
+    // Loaded eagerly (not lazily, like the room-triggered load below) since
+    // this also gates whether MatchFound's picker shows Community as an
+    // option at all — same kill-switch respect as native's
+    // communityNounsEnabled gate on Party's host picker, just missing
+    // until now on Duel specifically (a real, pre-existing gap on every
+    // platform: MatchFoundView/MatchFoundScreen both showed the picker
+    // unconditionally).
+    loadCommunityContent()
+      .then((c) => {
+        setCommunityEnabled(c.enabled)
+        if (c.enabled) setCommunityNouns(c.nouns)
+      })
+      .catch(() => {})
   }, [])
+
+  // The room only carries an authoritative content_pool once both players
+  // have agreed and the ready-gate flips it to 'active' — before that
+  // (home/queued/matchFound), MatchFound owns the accent color itself via
+  // its own live picker taps. Mirrors native's per-screen
+  // ThemeManager.isCommunity sets (DuelCountdownView, QuestionView,
+  // FinalRoundView, DuelResultView all independently read room.contentPool).
+  useEffect(() => {
+    if (phase === 'home' || phase === 'queued' || phase === 'matchFound') return
+    setCommunityTheme(room?.content_pool === 'community')
+  }, [phase, room?.content_pool])
+
+  useEffect(() => {
+    if (room?.content_pool === 'community' && communityNouns.length === 0) {
+      loadCommunityContent()
+        .then((c) => setCommunityNouns(c.nouns))
+        .catch(() => {})
+    }
+  }, [room?.content_pool, communityNouns.length])
 
   async function refreshPlayers(roomId: string) {
     try {
@@ -50,6 +85,8 @@ export function DuelApp({ onBackToParty }: { onBackToParty: () => void }) {
     setRoom(null)
     setPlayers([])
     setMatchResult(null)
+    setCommunityNouns([])
+    setCommunityTheme(false)
     setPhase('home')
   }
 
@@ -130,6 +167,7 @@ export function DuelApp({ onBackToParty }: { onBackToParty: () => void }) {
         opponentName={matchResult?.opponent_name ?? 'Opponent'}
         opponentRating={matchResult?.opponent_rating ?? 1000}
         yourRating={matchResult?.your_rating ?? 1000}
+        communityEnabled={communityEnabled}
         onReady={handleReady}
         onLeave={resetToHome}
       />
@@ -154,6 +192,7 @@ export function DuelApp({ onBackToParty }: { onBackToParty: () => void }) {
       players={players}
       userId={userId}
       content={content}
+      communityNouns={communityNouns}
       onRoundAdvanced={handleRoundAdvanced}
       onGameOver={handleGameOver}
       onRoomUpdate={handleRoomUpdate}

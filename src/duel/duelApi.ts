@@ -1,6 +1,6 @@
 import { supabase } from '../supabase'
 import { ensureSignedIn } from '../game'
-import type { DBRoom } from '../types'
+import type { ContentPool, DBRoom } from '../types'
 
 export interface DuelMatchResult {
   matched: boolean
@@ -14,6 +14,9 @@ export interface DuelMatchResult {
 export interface DuelReadyResult {
   room: DBRoom
   all_ready: boolean
+  pools_match: boolean
+  your_pool: ContentPool | null
+  opponent_pool: ContentPool | null
 }
 
 export interface DuelFinishResult {
@@ -66,9 +69,9 @@ export async function leaveDuelQueue(): Promise<void> {
   }
 }
 
-export async function markDuelReady(roomId: string): Promise<DuelReadyResult> {
+export async function markDuelReady(roomId: string, pool: ContentPool): Promise<DuelReadyResult> {
   const { data, error } = await supabase.functions.invoke('mark-duel-ready', {
-    body: { room_id: roomId },
+    body: { room_id: roomId, pool },
   })
   if (error) throw error
   return data as DuelReadyResult

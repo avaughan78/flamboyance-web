@@ -48,6 +48,7 @@ export function DuelResult({
   const won = isForfeitWin || wonByScore
 
   const outcomeTitle = isForfeitLoss ? 'DUEL FORFEITED' : drew ? 'DRAW' : won ? 'DUEL WON' : 'DUEL LOST'
+  const isCommunity = room.content_pool === 'community'
 
   if (!results && !error) {
     return (
@@ -79,20 +80,25 @@ export function DuelResult({
         {opponent && (
           <p style={{ fontSize: 13, color: 'var(--fb-text-3)', margin: '6px 0 0' }}>
             against {opponent.display_name}
-            {mine ? ` · ${mine.rating_delta >= 0 ? '+' : ''}${mine.rating_delta} rating` : ''}
+            {!isCommunity && mine ? ` · ${mine.rating_delta >= 0 ? '+' : ''}${mine.rating_delta} rating` : ''}
           </p>
+        )}
+        {isCommunity && (
+          <p style={{ fontSize: 13, color: 'var(--fb-text-3)', margin: '4px 0 0' }}>Community rounds don't affect rating.</p>
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 10 }}>
-        <StatTile label="Score" value={me?.score?.toLocaleString() ?? '—'} />
-        <StatTile label="Rating" value={mine ? String(mine.new_rating) : '—'} />
-        <StatTile
-          label="Change"
-          value={mine ? `${mine.rating_delta >= 0 ? '+' : ''}${mine.rating_delta}` : '—'}
-          accent={mine ? mine.rating_delta >= 0 : undefined}
-        />
-      </div>
+      {!isCommunity && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          <StatTile label="Score" value={me?.score?.toLocaleString() ?? '—'} />
+          <StatTile label="Rating" value={mine ? String(mine.new_rating) : '—'} />
+          <StatTile
+            label="Change"
+            value={mine ? `${mine.rating_delta >= 0 ? '+' : ''}${mine.rating_delta}` : '—'}
+            accent={mine ? mine.rating_delta >= 0 : undefined}
+          />
+        </div>
+      )}
 
       {error && <p style={{ fontSize: 13, color: 'var(--fb-accent)', margin: 0 }}>{error}</p>}
 
