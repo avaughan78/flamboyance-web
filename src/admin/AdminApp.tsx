@@ -3,12 +3,16 @@ import { Shell, Wordmark, inputStyle } from '../components/Shared'
 import { PillButton } from '../components/PillButton'
 import {
   AdminAuthError,
+  bulkModerate,
+  deleteCommunityNoun,
   editCommunityNoun,
   fetchCommunityNouns,
+  fetchCounts,
   moderateCommunityNoun,
   setFlagged,
   type AdminCreds,
   type CommunityNounRow,
+  type Counts,
   type Tab,
 } from './adminApi'
 
@@ -105,13 +109,33 @@ const TABS: Tab[] = ['pending', 'approved', 'rejected', 'flagged']
 function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('pending')
   const [rows, setRows] = useState<CommunityNounRow[] | null>(null)
+  const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState<Counts | null>(null)
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [sortByLikes, setSortByLikes] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+
+  // Debounced so every keystroke doesn't fire a request — 300ms is enough
+  // to feel instant without hammering the function on fast typing.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const effectiveSort = tab === 'approved' && sortByLikes
 
   async function load() {
     setError(null)
     try {
-      setRows(await fetchCommunityNouns(creds, tab))
+      const page = await fetchCommunityNouns(creds, tab, { search: debouncedSearch, sortByLikes: effectiveSort })
+      setRows(page.rows)
+      setTotal(page.total)
     } catch (err) {
       if (err instanceof AdminAuthError) {
         onLogout()
@@ -121,19 +145,68 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
     }
   }
 
+  async function loadCounts() {
+    try {
+      setCounts(await fetchCounts(creds))
+    } catch {
+      // Badge counts are a nice-to-have — a failed refresh just leaves
+      // the last-known numbers on the tabs rather than surfacing an error.
+    }
+  }
+
   useEffect(() => {
     setRows(null)
+    setSelected(new Set())
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab])
+  }, [tab, debouncedSearch, sortByLikes])
+
+  useEffect(() => {
+    loadCounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function loadMore() {
+    setIsLoadingMore(true)
+    try {
+      const page = await fetchCommunityNouns(creds, tab, {
+        search: debouncedSearch,
+        sortByLikes: effectiveSort,
+        offset: rows?.length ?? 0,
+      })
+      setRows((prev) => [...(prev ?? []), ...page.rows])
+      setTotal(page.total)
+    } catch {
+      setError("Couldn't load more — try again")
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
 
   async function act(id: string, action: 'approve' | 'reject') {
     setBusyId(id)
     try {
       await moderateCommunityNoun(creds, id, action)
       setRows((prev) => prev?.filter((r) => r.id !== id) ?? null)
+      setTotal((t) => Math.max(0, t - 1))
+      loadCounts()
     } catch {
       setError("Couldn't update that submission — try again")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function removeOne(id: string) {
+    if (!window.confirm("Delete this submission permanently? This can't be undone.")) return
+    setBusyId(id)
+    try {
+      await deleteCommunityNoun(creds, id)
+      setRows((prev) => prev?.filter((r) => r.id !== id) ?? null)
+      setTotal((t) => Math.max(0, t - 1))
+      loadCounts()
+    } catch {
+      setError("Couldn't delete that submission — try again")
     } finally {
       setBusyId(null)
     }
@@ -145,19 +218,50 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
     // that's no longer flagged doesn't belong in the current list.
     if (tab === 'flagged' && !updated.flagged) {
       setRows((prev) => prev?.filter((r) => r.id !== updated.id) ?? null)
+      setTotal((t) => Math.max(0, t - 1))
+      loadCounts()
       return
     }
     setRows((prev) => prev?.map((r) => (r.id === updated.id ? updated : r)) ?? null)
+    loadCounts()
   }
 
-  async function toggleFlag(id: string, flagged: boolean) {
+  async function toggleFlag(id: string, flagged: boolean, note?: string) {
     setBusyId(id)
     try {
-      handleSaved(await setFlagged(creds, id, flagged))
+      handleSaved(await setFlagged(creds, id, flagged, note))
     } catch {
       setError("Couldn't update that submission — try again")
     } finally {
       setBusyId(null)
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function bulkAct(operation: 'approve' | 'reject' | 'delete') {
+    if (selected.size === 0) return
+    if (operation === 'delete' && !window.confirm(`Delete ${selected.size} submission(s) permanently? This can't be undone.`)) {
+      return
+    }
+    setBulkBusy(true)
+    try {
+      await bulkModerate(creds, [...selected], operation)
+      setRows((prev) => prev?.filter((r) => !selected.has(r.id)) ?? null)
+      setTotal((t) => Math.max(0, t - selected.size))
+      setSelected(new Set())
+      loadCounts()
+    } catch {
+      setError('That bulk action failed — try again')
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -187,9 +291,67 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
             }}
           >
             {t}
+            {counts && counts[t] > 0 ? ` (${counts[t]})` : ''}
           </button>
         ))}
       </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          style={{ ...inputStyle, flex: 1, padding: '10px 14px', fontSize: 14 }}
+          placeholder="Search noun or thing…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button
+          onClick={() => {
+            setSelectMode((v) => !v)
+            setSelected(new Set())
+          }}
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            padding: '0 14px',
+            borderRadius: 11,
+            border: '1px solid var(--fb-border-strong)',
+            color: selectMode ? 'var(--fb-accent-text)' : 'var(--fb-text-3)',
+          }}
+        >
+          {selectMode ? 'Done' : 'Select'}
+        </button>
+      </div>
+
+      {tab === 'approved' && (
+        <button
+          onClick={() => setSortByLikes((v) => !v)}
+          style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--fb-text-3)' }}
+        >
+          Sorted by {sortByLikes ? 'most liked' : 'newest'} — tap to switch
+        </button>
+      )}
+
+      {selectMode && selected.size > 0 && (
+        <div className="fb-tint-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12 }}>
+          <span style={{ fontSize: 13, color: 'var(--fb-text-2)', flex: 1 }}>{selected.size} selected</span>
+          {tab === 'pending' && (
+            <>
+              <PillButton style="text" disabled={bulkBusy} onClick={() => bulkAct('approve')}>
+                Approve
+              </PillButton>
+              <PillButton style="text" disabled={bulkBusy} onClick={() => bulkAct('reject')}>
+                Reject
+              </PillButton>
+            </>
+          )}
+          <button
+            onClick={() => bulkAct('delete')}
+            disabled={bulkBusy}
+            style={{ fontSize: 13, fontWeight: 600, color: 'var(--fb-accent)' }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
 
       {error && <p style={{ color: 'var(--fb-accent)', fontSize: 13, margin: 0 }}>{error}</p>}
 
@@ -208,8 +370,17 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
               onAct={tab === 'pending' ? act : undefined}
               onSaved={handleSaved}
               onToggleFlag={toggleFlag}
+              onDelete={removeOne}
+              selectMode={selectMode}
+              isSelected={selected.has(row.id)}
+              onToggleSelected={() => toggleSelected(row.id)}
             />
           ))}
+          {rows.length < total && (
+            <PillButton style="ghost" disabled={isLoadingMore} onClick={loadMore}>
+              {isLoadingMore ? 'Loading…' : `Load more (${total - rows.length} left)`}
+            </PillButton>
+          )}
         </div>
       )}
     </Shell>
@@ -223,13 +394,21 @@ function SubmissionCard({
   onAct,
   onSaved,
   onToggleFlag,
+  onDelete,
+  selectMode,
+  isSelected,
+  onToggleSelected,
 }: {
   row: CommunityNounRow
   creds: AdminCreds
   busy: boolean
   onAct?: (id: string, action: 'approve' | 'reject') => void
   onSaved: (row: CommunityNounRow) => void
-  onToggleFlag: (id: string, flagged: boolean) => void
+  onToggleFlag: (id: string, flagged: boolean, note?: string) => void
+  onDelete: (id: string) => void
+  selectMode: boolean
+  isSelected: boolean
+  onToggleSelected: () => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [noun, setNoun] = useState(row.noun)
@@ -237,6 +416,8 @@ function SubmissionCard({
   const [description, setDescription] = useState(row.description ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isFlagging, setIsFlagging] = useState(false)
+  const [flagNoteDraft, setFlagNoteDraft] = useState('')
 
   function startEditing() {
     setNoun(row.noun)
@@ -295,33 +476,46 @@ function SubmissionCard({
 
   return (
     <div className="fb-tint-card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div>
-          {row.flagged && (
-            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--fb-accent)', margin: '0 0 2px' }}>🚩 Flagged</p>
-          )}
-          <p className="fb-pair-top on-tint" style={{ fontSize: 20 }}>
-            A {row.noun}
-          </p>
-          <p className="fb-pair-bottom on-tint" style={{ fontSize: 20 }}>
-            of {row.thing_name}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-          <button
-            onClick={() => onToggleFlag(row.id, !row.flagged)}
-            disabled={busy}
-            style={{ fontSize: 12, color: row.flagged ? 'var(--fb-accent)' : 'var(--fb-text-3)', padding: '4px 0' }}
-          >
-            {row.flagged ? 'Unflag' : 'Flag'}
-          </button>
-          <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', padding: '4px 0' }}>
-            Edit
-          </button>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        {selectMode && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelected}
+            style={{ marginTop: 4, width: 18, height: 18, flexShrink: 0 }}
+          />
+        )}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div>
+            {row.flagged && (
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--fb-accent)', margin: '0 0 2px' }}>🚩 Flagged</p>
+            )}
+            <p className="fb-pair-top on-tint" style={{ fontSize: 20 }}>
+              A {row.noun}
+            </p>
+            <p className="fb-pair-bottom on-tint" style={{ fontSize: 20 }}>
+              of {row.thing_name}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+            <button
+              onClick={() => (row.flagged ? onToggleFlag(row.id, false) : setIsFlagging(true))}
+              disabled={busy}
+              style={{ fontSize: 12, color: row.flagged ? 'var(--fb-accent)' : 'var(--fb-text-3)', padding: '4px 0' }}
+            >
+              {row.flagged ? 'Unflag' : 'Flag'}
+            </button>
+            <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', padding: '4px 0' }}>
+              Edit
+            </button>
+          </div>
         </div>
       </div>
       {row.description && (
         <p style={{ fontSize: 13, color: 'var(--fb-text-2)', margin: 0 }}>{row.description}</p>
+      )}
+      {row.flag_note && (
+        <p style={{ fontSize: 12, color: 'var(--fb-accent)', margin: 0 }}>Flag note: {row.flag_note}</p>
       )}
       {verdict && (
         <p style={{ fontSize: 12, color: 'var(--fb-text-3)', margin: 0 }}>
@@ -335,16 +529,53 @@ function SubmissionCard({
       <p style={{ fontSize: 11, color: 'var(--fb-text-4)', margin: 0 }}>
         {new Date(row.created_at).toLocaleString()} · {row.likes_count} like{row.likes_count === 1 ? '' : 's'}
       </p>
-      {onAct && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <PillButton disabled={busy} onClick={() => onAct(row.id, 'approve')}>
-            {busy ? '…' : 'Approve'}
-          </PillButton>
-          <PillButton style="ghost" disabled={busy} onClick={() => onAct(row.id, 'reject')}>
-            {busy ? '…' : 'Reject'}
-          </PillButton>
+
+      {isFlagging && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <textarea
+            style={{ ...inputStyle, resize: 'vertical', minHeight: 44, fontFamily: 'inherit', fontSize: 13 }}
+            value={flagNoteDraft}
+            onChange={(e) => setFlagNoteDraft(e.target.value)}
+            placeholder="Why? (optional — e.g. paraphrase the report email)"
+            maxLength={300}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <PillButton
+              disabled={busy}
+              onClick={() => {
+                onToggleFlag(row.id, true, flagNoteDraft.trim() || undefined)
+                setIsFlagging(false)
+                setFlagNoteDraft('')
+              }}
+            >
+              Add flag
+            </PillButton>
+            <PillButton style="ghost" disabled={busy} onClick={() => setIsFlagging(false)}>
+              Cancel
+            </PillButton>
+          </div>
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+        {onAct && (
+          <>
+            <PillButton disabled={busy} onClick={() => onAct(row.id, 'approve')}>
+              {busy ? '…' : 'Approve'}
+            </PillButton>
+            <PillButton style="ghost" disabled={busy} onClick={() => onAct(row.id, 'reject')}>
+              {busy ? '…' : 'Reject'}
+            </PillButton>
+          </>
+        )}
+        <button
+          onClick={() => onDelete(row.id)}
+          disabled={busy}
+          style={{ fontSize: 13, fontWeight: 600, color: 'var(--fb-text-4)' }}
+        >
+          Delete
+        </button>
+      </div>
     </div>
   )
 }

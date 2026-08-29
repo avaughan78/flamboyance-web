@@ -18,10 +18,16 @@ export type CommunityNounRow = {
   ai_verdict: AdminVerdict
   likes_count: number
   flagged: boolean
+  flag_note: string | null
   created_at: string
 }
 
+export type Counts = { pending: number; approved: number; rejected: number; flagged: number }
+
+export type Page = { rows: CommunityNounRow[]; total: number }
+
 const FUNCTION_URL = 'https://uockbafewpevbpxfelde.supabase.co/functions/v1/admin-community-nouns'
+const PAGE_SIZE = 25
 
 class AdminAuthError extends Error {}
 
@@ -38,13 +44,26 @@ async function adminFetch(creds: AdminCreds, path: string, init?: RequestInit): 
   return res
 }
 
-export { AdminAuthError }
+export { AdminAuthError, PAGE_SIZE }
 
-export async function fetchCommunityNouns(creds: AdminCreds, tab: Tab): Promise<CommunityNounRow[]> {
-  const res = await adminFetch(creds, `?status=${tab}`)
+export async function fetchCommunityNouns(
+  creds: AdminCreds,
+  tab: Tab,
+  opts: { search?: string; sortByLikes?: boolean; offset?: number } = {}
+): Promise<Page> {
+  const params = new URLSearchParams({ status: tab, limit: String(PAGE_SIZE), offset: String(opts.offset ?? 0) })
+  if (opts.search) params.set('search', opts.search)
+  if (opts.sortByLikes) params.set('sort', 'likes')
+  const res = await adminFetch(creds, `?${params.toString()}`)
   if (!res.ok) throw new Error('Could not load submissions')
   const body = await res.json()
-  return body.rows
+  return { rows: body.rows, total: body.total }
+}
+
+export async function fetchCounts(creds: AdminCreds): Promise<Counts> {
+  const res = await adminFetch(creds, '?counts=1')
+  if (!res.ok) throw new Error('Could not load counts')
+  return res.json()
 }
 
 export async function moderateCommunityNoun(creds: AdminCreds, id: string, action: 'approve' | 'reject'): Promise<void> {
@@ -56,11 +75,30 @@ export async function moderateCommunityNoun(creds: AdminCreds, id: string, actio
   if (!res.ok) throw new Error('Could not update that submission')
 }
 
-export async function setFlagged(creds: AdminCreds, id: string, flagged: boolean): Promise<CommunityNounRow> {
+export async function bulkModerate(creds: AdminCreds, ids: string[], operation: 'approve' | 'reject' | 'delete'): Promise<void> {
   const res = await adminFetch(creds, '', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id, action: flagged ? 'flag' : 'unflag' }),
+    body: JSON.stringify({ action: 'bulk', ids, operation }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error ?? 'Could not update those submissions')
+}
+
+export async function deleteCommunityNoun(creds: AdminCreds, id: string): Promise<void> {
+  const res = await adminFetch(creds, '', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, action: 'delete' }),
+  })
+  if (!res.ok) throw new Error('Could not delete that submission')
+}
+
+export async function setFlagged(creds: AdminCreds, id: string, flagged: boolean, note?: string): Promise<CommunityNounRow> {
+  const res = await adminFetch(creds, '', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, action: flagged ? 'flag' : 'unflag', note }),
   })
   const body = await res.json()
   if (!res.ok) throw new Error(body.error ?? 'Could not update that submission')
