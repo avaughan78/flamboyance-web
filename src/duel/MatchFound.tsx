@@ -134,6 +134,12 @@ export function MatchFound({
     markDuelReady(room.id, chosenPool, false).catch(() => {})
   }
 
+  // Ready is only tappable once both players' live picks agree — no point
+  // letting someone commit to a pool the opponent visibly hasn't matched
+  // yet, now that the picker broadcasts live. When Community isn't even
+  // enabled, this doesn't gate on a choice there's no way to make.
+  const canReady = !communityEnabled || opponentPool === chosenPool
+
   const total = yourRating + opponentRating
   const yourShare = total > 0 ? yourRating / total : 0.5
 
@@ -203,7 +209,9 @@ export function MatchFound({
             ? "Still hasn't confirmed — try again?"
             : isReady
               ? `Waiting for ${opponentName}…`
-              : 'Both players need to confirm ready.'}
+              : !canReady
+                ? `Pick the same mode as ${opponentName} to continue.`
+                : 'Both players need to confirm ready.'}
       </p>
 
       <div style={{ display: 'flex', gap: 12 }}>
@@ -241,9 +249,11 @@ export function MatchFound({
             // no-op behind disabled — the only way to pick a different
             // pool used to be waiting for an actual mismatch to surface
             // the "Change pick" button, which meant a solo change-of-mind
-            // had no way out short of the 60s timeout.
-            <PillButton onClick={() => (isReady ? cancelReady() : setIsReady(true))}>
-              {isReady ? 'Waiting… (tap to cancel)' : 'Ready'}
+            // had no way out short of the 60s timeout. No "(tap to
+            // cancel)" hint in the label — that wrapped the button onto
+            // two lines, and the toggle is intuitive enough bare.
+            <PillButton onClick={() => (isReady ? cancelReady() : setIsReady(true))} disabled={!isReady && !canReady}>
+              {isReady ? 'Waiting…' : 'Ready'}
             </PillButton>
           )}
         </div>
