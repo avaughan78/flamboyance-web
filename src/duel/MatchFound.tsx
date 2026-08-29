@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Shell, Avatar } from '../components/Shared'
 import { PillButton } from '../components/PillButton'
-import { cancelDuelLobby, markDuelReady } from './duelApi'
+import { cancelDuelLobby, markDuelReady, setDuelPoolPick } from './duelApi'
 import { setCommunityTheme } from '../theme'
 import type { ContentPool, DBRoom } from '../types'
 
@@ -95,6 +95,33 @@ export function MatchFound({
     }
   }, [room.id, isReady, retryKey, chosenPool])
 
+  // Broadcasts this player's current pick and reads back the opponent's,
+  // every 2s while still deciding (not yet ready) — lets both players see
+  // each other's live selection and converge before either commits,
+  // rather than only discovering a mismatch after both are ready. Keyed
+  // on chosenPool too, so a tap restarts the effect and broadcasts
+  // immediately rather than waiting for the next tick.
+  useEffect(() => {
+    if (isReady) return
+    let cancelled = false
+
+    async function tick() {
+      try {
+        const result = await withTimeout(setDuelPoolPick(room.id, chosenPool), READY_REQUEST_TIMEOUT_MS)
+        if (!cancelled && result !== null) setOpponentPool(result)
+      } catch {
+        // transient — the next tick just tries again
+      }
+    }
+
+    tick()
+    const intervalId = window.setInterval(tick, 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [room.id, isReady, chosenPool])
+
   // Withdraws this player's ready state, both locally and server-side —
   // used by the toggle-off tap and by "Change pick". The server call is
   // what actually matters: without it, a stale ready_at/preferred_pool
@@ -158,6 +185,11 @@ export function MatchFound({
               <PoolOption label="Original" pool="original" chosenPool={chosenPool} onChoose={setChosenPool} disabled={isReady} />
               <PoolOption label="Community" pool="community" chosenPool={chosenPool} onChoose={setChosenPool} disabled={isReady} />
             </div>
+            {!isReady && opponentPool && (
+              <p style={{ fontSize: 12, color: 'var(--fb-text-4)', margin: '6px 0 0' }}>
+                {opponentName}'s currently on {opponentPool === 'community' ? 'Community' : 'Original'}
+              </p>
+            )}
           </div>
         )}
       </div>

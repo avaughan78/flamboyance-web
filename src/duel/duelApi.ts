@@ -77,6 +77,19 @@ export async function markDuelReady(roomId: string, pool: ContentPool, ready = t
   return data as DuelReadyResult
 }
 
+/** Broadcasts this player's live pool pick before either player has
+ * readied up — separate from markDuelReady, which only ever writes
+ * preferred_pool alongside committing to Ready. Lets both players see
+ * each other's current selection in real time and converge by watching,
+ * rather than only discovering a mismatch after both commit. */
+export async function setDuelPoolPick(roomId: string, pool: ContentPool): Promise<ContentPool | null> {
+  const { data, error } = await supabase.functions.invoke('set-duel-pool-pick', {
+    body: { room_id: roomId, pool },
+  })
+  if (error) throw error
+  return (data as { opponent_pool: ContentPool | null }).opponent_pool
+}
+
 /** Cancels a duel still stuck in 'lobby' — Duel has no real host, so
  * unlike Party's rooms UPDATE (RLS-restricted to auth.uid() = host_id)
  * this goes through a service-role edge function either player can call.
