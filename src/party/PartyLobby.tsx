@@ -123,12 +123,22 @@ export function PartyLobby({
         {players.map((p) => (
           <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Avatar initial={p.display_name.slice(0, 1)} emphasized={p.user_id === session.host_id} />
-            <span style={{ fontSize: 15, fontWeight: 500, flex: 1 }}>
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 500,
+                flex: 1,
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
               {p.display_name}
-              {p.user_id === session.host_id && (
-                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--fb-accent-mid)', marginLeft: 6 }}>host</span>
-              )}
             </span>
+            {p.user_id === session.host_id && (
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--fb-accent-mid)', flexShrink: 0 }}>host</span>
+            )}
             {p.ready_at ? (
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fb-accent)' }}>✓ ready</span>
             ) : (

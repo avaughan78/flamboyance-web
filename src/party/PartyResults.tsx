@@ -60,7 +60,19 @@ export function PartyResults({
             >
               <RankBadge rank={i + 1} />
               <Avatar initial={p.display_name.slice(0, 1)} emphasized={p.user_id === userId || i === 0} size={i < 3 ? 38 : 32} />
-              <span style={{ fontSize: i === 0 ? 17 : i < 3 ? 16 : 15, fontWeight: 600, flex: 1 }}>{p.display_name}</span>
+              <span
+                style={{
+                  fontSize: i === 0 ? 17 : i < 3 ? 16 : 15,
+                  fontWeight: 600,
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {p.display_name}
+              </span>
               {p.user_id === userId && (
                 <span
                   style={{

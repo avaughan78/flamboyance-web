@@ -108,7 +108,19 @@ export function DuelResult({
                   <span style={{ width: 20, fontSize: 12, color: 'var(--fb-text-3)', fontVariantNumeric: 'tabular-nums' }}>
                     {i + 1}
                   </span>
-                  <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{s.display_name}</span>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {s.display_name}
+                  </span>
                   <span style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--fb-text)' }}>
                     {s.points.toLocaleString()}
                   </span>

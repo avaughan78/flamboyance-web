@@ -2,10 +2,12 @@ export type AdminCreds = { username: string; password: string }
 
 export type CommunityNounStatus = 'pending' | 'approved' | 'rejected'
 
-// Not a real status — a virtual tab pulling every flagged row regardless
-// of status, so it's kept as a separate union from CommunityNounStatus
-// rather than folded into it.
-export type Tab = CommunityNounStatus | 'flagged'
+// Neither of these is a real status — "flagged" pulls every flagged row
+// regardless of status, "ai_rejected" is a log of what the AI turned
+// down before it was ever inserted (see community_noun_rejections) —
+// kept as a separate union from CommunityNounStatus rather than folded
+// into it.
+export type Tab = CommunityNounStatus | 'flagged' | 'ai_rejected'
 
 export type AdminVerdict = { reject: boolean; reason: string } | { error: true; message: string } | null
 
@@ -22,7 +24,7 @@ export type CommunityNounRow = {
   created_at: string
 }
 
-export type Counts = { pending: number; approved: number; rejected: number; flagged: number }
+export type Counts = { pending: number; approved: number; rejected: number; flagged: number; ai_rejected: number }
 
 export type Page = { rows: CommunityNounRow[]; total: number }
 

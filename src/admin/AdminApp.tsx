@@ -104,7 +104,14 @@ function LoginScreen({ onSignedIn }: { onSignedIn: (creds: AdminCreds) => void }
   )
 }
 
-const TABS: Tab[] = ['pending', 'approved', 'rejected', 'flagged']
+const TABS: Tab[] = ['pending', 'approved', 'rejected', 'flagged', 'ai_rejected']
+const TAB_LABELS: Record<Tab, string> = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  flagged: 'flagged',
+  ai_rejected: 'AI rejected',
+}
 
 function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('pending')
@@ -274,23 +281,23 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, background: 'var(--fb-surface)', border: '1px solid var(--fb-border)', borderRadius: 11, padding: 4 }}>
+      <div style={{ display: 'flex', gap: 4, background: 'var(--fb-surface)', border: '1px solid var(--fb-border)', borderRadius: 11, padding: 4, overflowX: 'auto' }}>
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             style={{
-              flex: 1,
-              padding: '9px 0',
+              flex: '1 0 auto',
+              padding: '9px 8px',
               borderRadius: 8,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 600,
-              textTransform: 'capitalize',
+              whiteSpace: 'nowrap',
               background: tab === t ? 'var(--fb-tint-button-bg)' : 'transparent',
               color: tab === t ? 'var(--fb-accent-text)' : 'var(--fb-text-3)',
             }}
           >
-            {t}
+            {TAB_LABELS[t]}
             {counts && counts[t] > 0 ? ` (${counts[t]})` : ''}
           </button>
         ))}
@@ -303,22 +310,24 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <button
-          onClick={() => {
-            setSelectMode((v) => !v)
-            setSelected(new Set())
-          }}
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            padding: '0 14px',
-            borderRadius: 11,
-            border: '1px solid var(--fb-border-strong)',
-            color: selectMode ? 'var(--fb-accent-text)' : 'var(--fb-text-3)',
-          }}
-        >
-          {selectMode ? 'Done' : 'Select'}
-        </button>
+        {tab !== 'ai_rejected' && (
+          <button
+            onClick={() => {
+              setSelectMode((v) => !v)
+              setSelected(new Set())
+            }}
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              padding: '0 14px',
+              borderRadius: 11,
+              border: '1px solid var(--fb-border-strong)',
+              color: selectMode ? 'var(--fb-accent-text)' : 'var(--fb-text-3)',
+            }}
+          >
+            {selectMode ? 'Done' : 'Select'}
+          </button>
+        )}
       </div>
 
       {tab === 'approved' && (
@@ -374,6 +383,7 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
               selectMode={selectMode}
               isSelected={selected.has(row.id)}
               onToggleSelected={() => toggleSelected(row.id)}
+              readOnly={tab === 'ai_rejected'}
             />
           ))}
           {rows.length < total && (
@@ -398,6 +408,7 @@ function SubmissionCard({
   selectMode,
   isSelected,
   onToggleSelected,
+  readOnly,
 }: {
   row: CommunityNounRow
   creds: AdminCreds
@@ -409,6 +420,7 @@ function SubmissionCard({
   selectMode: boolean
   isSelected: boolean
   onToggleSelected: () => void
+  readOnly?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [noun, setNoun] = useState(row.noun)
@@ -497,18 +509,20 @@ function SubmissionCard({
               of {row.thing_name}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-            <button
-              onClick={() => (row.flagged ? onToggleFlag(row.id, false) : setIsFlagging(true))}
-              disabled={busy}
-              style={{ fontSize: 12, color: row.flagged ? 'var(--fb-accent)' : 'var(--fb-text-3)', padding: '4px 0' }}
-            >
-              {row.flagged ? 'Unflag' : 'Flag'}
-            </button>
-            <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', padding: '4px 0' }}>
-              Edit
-            </button>
-          </div>
+          {!readOnly && (
+            <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+              <button
+                onClick={() => (row.flagged ? onToggleFlag(row.id, false) : setIsFlagging(true))}
+                disabled={busy}
+                style={{ fontSize: 12, color: row.flagged ? 'var(--fb-accent)' : 'var(--fb-text-3)', padding: '4px 0' }}
+              >
+                {row.flagged ? 'Unflag' : 'Flag'}
+              </button>
+              <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', padding: '4px 0' }}>
+                Edit
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {row.description && (
@@ -557,25 +571,27 @@ function SubmissionCard({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
-        {onAct && (
-          <>
-            <PillButton disabled={busy} onClick={() => onAct(row.id, 'approve')}>
-              {busy ? '…' : 'Approve'}
-            </PillButton>
-            <PillButton style="ghost" disabled={busy} onClick={() => onAct(row.id, 'reject')}>
-              {busy ? '…' : 'Reject'}
-            </PillButton>
-          </>
-        )}
-        <button
-          onClick={() => onDelete(row.id)}
-          disabled={busy}
-          style={{ fontSize: 13, fontWeight: 600, color: 'var(--fb-text-4)' }}
-        >
-          Delete
-        </button>
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+          {onAct && (
+            <>
+              <PillButton disabled={busy} onClick={() => onAct(row.id, 'approve')}>
+                {busy ? '…' : 'Approve'}
+              </PillButton>
+              <PillButton style="ghost" disabled={busy} onClick={() => onAct(row.id, 'reject')}>
+                {busy ? '…' : 'Reject'}
+              </PillButton>
+            </>
+          )}
+          <button
+            onClick={() => onDelete(row.id)}
+            disabled={busy}
+            style={{ fontSize: 13, fontWeight: 600, color: 'var(--fb-text-4)' }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }
