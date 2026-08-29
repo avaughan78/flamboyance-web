@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { Shell, Avatar } from '../components/Shared'
 import { PillButton } from '../components/PillButton'
-import { markDuelReady } from './duelApi'
+import { cancelDuelLobby, markDuelReady } from './duelApi'
 import { setCommunityTheme } from '../theme'
 import type { ContentPool, DBRoom } from '../types'
 
 const READY_POLL_MS = 1000
 const READY_REQUEST_TIMEOUT_MS = 6000
-const READY_WALL_CLOCK_RETRY_MS = 20000
+// 60s, not 20 — the shorter window used to fire before a real opponent
+// (who also has to look at the pool picker and decide) had a realistic
+// chance to tap Ready, silently stopping this player's poll loop and
+// landing on "Retry" while the opponent was still just reading the screen.
+const READY_WALL_CLOCK_RETRY_MS = 60000
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -91,6 +95,18 @@ export function MatchFound({
     }
   }, [room.id, isReady, retryKey, chosenPool])
 
+  // Withdraws this player's ready state, both locally and server-side —
+  // used by the toggle-off tap and by "Change pick". The server call is
+  // what actually matters: without it, a stale ready_at/preferred_pool
+  // stays live on the row, so a race could activate the room on a pick
+  // this player already backed out of (see mark-duel-ready's `ready:
+  // false` doc comment).
+  function cancelReady() {
+    setIsReady(false)
+    setPoolsMismatched(false)
+    markDuelReady(room.id, chosenPool, false).catch(() => {})
+  }
+
   const total = yourRating + opponentRating
   const yourShare = total > 0 ? yourRating / total : 0.5
 
@@ -160,20 +176,25 @@ export function MatchFound({
 
       <div style={{ display: 'flex', gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <PillButton style="ghost" onClick={onLeave}>
+          <PillButton
+            style="ghost"
+            onClick={() => {
+              // Duel has no real host, so unlike Party's rooms UPDATE
+              // (RLS-restricted to host_id), leaving here goes through a
+              // service-role edge function either player can call —
+              // otherwise the room sat in 'lobby' forever and
+              // find_or_create_duel_match would reattach a re-queueing
+              // player to this exact dead room for up to 2 minutes.
+              cancelDuelLobby(room.id).catch(() => {})
+              onLeave()
+            }}
+          >
             Someone else
           </PillButton>
         </div>
         <div style={{ flex: 1 }}>
           {poolsMismatched && !showRetry ? (
-            <PillButton
-              onClick={() => {
-                setIsReady(false)
-                setPoolsMismatched(false)
-              }}
-            >
-              Change pick
-            </PillButton>
+            <PillButton onClick={cancelReady}>Change pick</PillButton>
           ) : showRetry ? (
             <PillButton
               onClick={() => {
@@ -184,8 +205,13 @@ export function MatchFound({
               Retry
             </PillButton>
           ) : (
-            <PillButton onClick={() => setIsReady(true)} disabled={isReady}>
-              {isReady ? 'Waiting…' : 'Ready'}
+            // Tapping again while ready unreadies, rather than being a
+            // no-op behind disabled — the only way to pick a different
+            // pool used to be waiting for an actual mismatch to surface
+            // the "Change pick" button, which meant a solo change-of-mind
+            // had no way out short of the 60s timeout.
+            <PillButton onClick={() => (isReady ? cancelReady() : setIsReady(true))}>
+              {isReady ? 'Waiting… (tap to cancel)' : 'Ready'}
             </PillButton>
           )}
         </div>

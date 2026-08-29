@@ -69,12 +69,23 @@ export async function leaveDuelQueue(): Promise<void> {
   }
 }
 
-export async function markDuelReady(roomId: string, pool: ContentPool): Promise<DuelReadyResult> {
+export async function markDuelReady(roomId: string, pool: ContentPool, ready = true): Promise<DuelReadyResult> {
   const { data, error } = await supabase.functions.invoke('mark-duel-ready', {
-    body: { room_id: roomId, pool },
+    body: { room_id: roomId, pool, ready },
   })
   if (error) throw error
   return data as DuelReadyResult
+}
+
+/** Cancels a duel still stuck in 'lobby' — Duel has no real host, so
+ * unlike Party's rooms UPDATE (RLS-restricted to auth.uid() = host_id)
+ * this goes through a service-role edge function either player can call.
+ * find_or_create_duel_match reattaches a user to any of their own
+ * is_rated rooms still in ('active','lobby') for 2 minutes after
+ * creation, so leaving a dead room uncancelled meant re-queueing just put
+ * you right back in the same stuck match. */
+export async function cancelDuelLobby(roomId: string): Promise<void> {
+  await supabase.functions.invoke('cancel-duel-lobby', { body: { room_id: roomId } })
 }
 
 /** Early "Next" tap on Reveal, before the local per-player countdown
