@@ -9,6 +9,7 @@ import {
   fetchCommunityNouns,
   fetchCounts,
   moderateCommunityNoun,
+  promoteRejectedNoun,
   setFlagged,
   type AdminCreds,
   type CommunityNounRow,
@@ -204,6 +205,28 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
     }
   }
 
+  // Promotes an AI-rejected log entry into a real community_nouns row —
+  // its id changes in the process (the rejection's id isn't the new row's
+  // id), so unlike handleSaved there's nothing to update in place; it just
+  // leaves the AI-rejected list the same way approve/reject do.
+  async function promote(
+    id: string,
+    status: 'pending' | 'approved',
+    fields?: { noun: string; thing_name: string; description: string }
+  ) {
+    setBusyId(id)
+    try {
+      await promoteRejectedNoun(creds, id, status, fields)
+      setRows((prev) => prev?.filter((r) => r.id !== id) ?? null)
+      setTotal((t) => Math.max(0, t - 1))
+      loadCounts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't promote that submission")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function removeOne(id: string) {
     if (!window.confirm("Delete this submission permanently? This can't be undone.")) return
     setBusyId(id)
@@ -377,13 +400,14 @@ function ModerationScreen({ creds, onLogout }: { creds: AdminCreds; onLogout: ()
               creds={creds}
               busy={busyId === row.id}
               onAct={tab === 'pending' ? act : undefined}
+              onPromote={tab === 'ai_rejected' ? promote : undefined}
               onSaved={handleSaved}
               onToggleFlag={toggleFlag}
               onDelete={removeOne}
               selectMode={selectMode}
               isSelected={selected.has(row.id)}
               onToggleSelected={() => toggleSelected(row.id)}
-              readOnly={tab === 'ai_rejected'}
+              isRejectionLog={tab === 'ai_rejected'}
             />
           ))}
           {rows.length < total && (
@@ -402,25 +426,34 @@ function SubmissionCard({
   creds,
   busy,
   onAct,
+  onPromote,
   onSaved,
   onToggleFlag,
   onDelete,
   selectMode,
   isSelected,
   onToggleSelected,
-  readOnly,
+  isRejectionLog,
 }: {
   row: CommunityNounRow
   creds: AdminCreds
   busy: boolean
   onAct?: (id: string, action: 'approve' | 'reject') => void
+  onPromote?: (
+    id: string,
+    status: 'pending' | 'approved',
+    fields?: { noun: string; thing_name: string; description: string }
+  ) => void
   onSaved: (row: CommunityNounRow) => void
   onToggleFlag: (id: string, flagged: boolean, note?: string) => void
   onDelete: (id: string) => void
   selectMode: boolean
   isSelected: boolean
   onToggleSelected: () => void
-  readOnly?: boolean
+  /** True on the AI-rejected tab — row.id is a community_noun_rejections
+   * log entry, not a real community_nouns row, so Save/Approve here
+   * promote it into one instead of updating/moderating in place. */
+  isRejectionLog?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [noun, setNoun] = useState(row.noun)
@@ -443,8 +476,15 @@ function SubmissionCard({
     setIsSaving(true)
     setSaveError(null)
     try {
-      const updated = await editCommunityNoun(creds, row.id, { noun, thing_name: thingName, description })
-      onSaved(updated)
+      if (isRejectionLog) {
+        // No real row to update — this is what actually creates one,
+        // defaulting to 'pending' so it goes through the normal queue
+        // rather than going live unreviewed.
+        onPromote?.(row.id, 'pending', { noun, thing_name: thingName, description })
+      } else {
+        const updated = await editCommunityNoun(creds, row.id, { noun, thing_name: thingName, description })
+        onSaved(updated)
+      }
       setIsEditing(false)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Couldn't save those changes")
@@ -509,8 +549,10 @@ function SubmissionCard({
               of {row.thing_name}
             </p>
           </div>
-          {!readOnly && (
-            <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+            {/* Flagging only makes sense against a real row — a rejection
+                log entry has no ongoing existence to report. */}
+            {!isRejectionLog && (
               <button
                 onClick={() => (row.flagged ? onToggleFlag(row.id, false) : setIsFlagging(true))}
                 disabled={busy}
@@ -518,11 +560,11 @@ function SubmissionCard({
               >
                 {row.flagged ? 'Unflag' : 'Flag'}
               </button>
-              <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', padding: '4px 0' }}>
-                Edit
-              </button>
-            </div>
-          )}
+            )}
+            <button onClick={startEditing} style={{ fontSize: 12, color: 'var(--fb-text-3)', padding: '4px 0' }}>
+              Edit
+            </button>
+          </div>
         </div>
       </div>
       {row.description && (
@@ -571,27 +613,32 @@ function SubmissionCard({
         </div>
       )}
 
-      {!readOnly && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
-          {onAct && (
-            <>
-              <PillButton disabled={busy} onClick={() => onAct(row.id, 'approve')}>
-                {busy ? '…' : 'Approve'}
-              </PillButton>
-              <PillButton style="ghost" disabled={busy} onClick={() => onAct(row.id, 'reject')}>
-                {busy ? '…' : 'Reject'}
-              </PillButton>
-            </>
-          )}
-          <button
-            onClick={() => onDelete(row.id)}
-            disabled={busy}
-            style={{ fontSize: 13, fontWeight: 600, color: 'var(--fb-text-4)' }}
-          >
-            Delete
-          </button>
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+        {onAct && (
+          <>
+            <PillButton disabled={busy} onClick={() => onAct(row.id, 'approve')}>
+              {busy ? '…' : 'Approve'}
+            </PillButton>
+            <PillButton style="ghost" disabled={busy} onClick={() => onAct(row.id, 'reject')}>
+              {busy ? '…' : 'Reject'}
+            </PillButton>
+          </>
+        )}
+        {/* Direct override — approves the content as-is, no edit needed.
+            Save() above covers the "fix it first" path via Edit. */}
+        {onPromote && (
+          <PillButton disabled={busy} onClick={() => onPromote(row.id, 'approved')}>
+            {busy ? '…' : 'Approve'}
+          </PillButton>
+        )}
+        <button
+          onClick={() => onDelete(row.id)}
+          disabled={busy}
+          style={{ fontSize: 13, fontWeight: 600, color: 'var(--fb-text-4)' }}
+        >
+          Delete
+        </button>
+      </div>
     </div>
   )
 }

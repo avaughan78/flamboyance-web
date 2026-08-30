@@ -107,6 +107,28 @@ export async function setFlagged(creds: AdminCreds, id: string, flagged: boolean
   return body.row
 }
 
+/** Promotes an AI-rejected submission (a community_noun_rejections log
+ * entry, never actually inserted) into a real community_nouns row —
+ * optionally with edited fields to fix whatever the AI objected to.
+ * Defaults to 'pending' (send it through the normal queue); pass
+ * 'approved' for a direct override. Either way the rejection log entry
+ * is removed, so the row disappears from the AI-rejected tab. */
+export async function promoteRejectedNoun(
+  creds: AdminCreds,
+  id: string,
+  status: 'pending' | 'approved',
+  fields?: { noun: string; thing_name: string; description: string }
+): Promise<CommunityNounRow> {
+  const res = await adminFetch(creds, '', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, action: 'promote', status, ...fields }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Could not promote that submission')
+  return body.row
+}
+
 export async function editCommunityNoun(
   creds: AdminCreds,
   id: string,
