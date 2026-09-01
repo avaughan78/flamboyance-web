@@ -60,7 +60,40 @@
     padding: 20px;
     margin-top: 16px;
   }
-  .contact p { margin: 4px 0; }
+  .contact p { margin: 4px 0 16px; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 6px;
+  }
+  .field { margin-bottom: 14px; }
+  textarea, input[type="email"] {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  textarea { resize: vertical; min-height: 100px; }
+  textarea:focus, input[type="email"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .form-status { font-size: 14px; margin-top: 10px; }
+  .form-status.error { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -70,9 +103,10 @@
 
   <h2>How do I change my display name?</h2>
   <p>
-    Open the <strong>You</strong> tab (bottom right), type a new name, and tap
-    <strong>Save</strong>. This is the name other players see on the league
-    leaderboard and in duels or parties.
+    Open the <strong>You</strong> tab and tap the pencil icon next to your name —
+    that opens the name-picker wheel, where you can spin or drag to a new
+    adjective/noun combo and tap <strong>Done</strong>. This is the name other
+    players see on the league leaderboard and in duels or parties.
   </p>
 
   <h2>How does the weekly League work?</h2>
@@ -100,9 +134,11 @@
 
   <h2>How do I delete my account and data?</h2>
   <p>
-    Open the <strong>You</strong> tab and tap <strong>Delete my data</strong>.
-    This is immediate and permanent — see the
-    <a href="./privacy.html">Privacy Policy</a> for exactly what's removed.
+    Open the <strong>You</strong> tab, tap <strong>Settings</strong>, then tap
+    <strong>Delete my data</strong>. This is immediate and permanent — see the
+    <a href="./privacy.html">Privacy Policy</a> for exactly what's removed, or
+    the <a href="./data-deletion.html">data deletion page</a> if you've already
+    uninstalled the app.
   </p>
 
   <h2>A Duel or Party isn't connecting</h2>
@@ -117,9 +153,54 @@
 
   <h2>Still stuck?</h2>
   <div class="contact">
-    <p>Email <a href="mailto:avaughan78@gmail.com">avaughan78@gmail.com</a></p>
-    <p>We read every message and reply as soon as we can.</p>
+    <p>Send us a message below — same inbox the in-app feedback form goes to. We read every message and reply as soon as we can.</p>
+    <form id="feedback-form">
+      <div class="field">
+        <label for="feedback-text">What's up?</label>
+        <textarea id="feedback-text" name="feedback" required maxlength="3000" placeholder="Bug report, missing collective noun, anything else..."></textarea>
+      </div>
+      <div class="field">
+        <label for="feedback-email">Your email (optional, so we can reply)</label>
+        <input id="feedback-email" name="contact_email" type="email" placeholder="you@example.com" />
+      </div>
+      <button type="submit" id="feedback-submit">Send</button>
+      <p class="form-status" id="feedback-status" role="status"></p>
+    </form>
   </div>
 </main>
+<script>
+  const form = document.getElementById("feedback-form");
+  const status = document.getElementById("feedback-status");
+  const submitButton = document.getElementById("feedback-submit");
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submitButton.disabled = true;
+    status.className = "form-status";
+    status.textContent = "Sending…";
+
+    const feedback = document.getElementById("feedback-text").value.trim();
+    const contactEmail = document.getElementById("feedback-email").value.trim();
+
+    try {
+      const response = await fetch("https://uockbafewpevbpxfelde.supabase.co/functions/v1/submit-web-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback, contact_email: contactEmail || undefined }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Something went wrong — try again in a moment.");
+      }
+      form.reset();
+      status.textContent = "Sent — thanks, we'll take a look.";
+    } catch (err) {
+      status.className = "form-status error";
+      status.textContent = err instanceof Error ? err.message : "Something went wrong — try again in a moment.";
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+</script>
 </body>
 </html>
